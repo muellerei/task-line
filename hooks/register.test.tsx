@@ -1,6 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 
-import { answerOk, answering, call, engine, failedRun, mountBand, runCommand, todo } from './test-support'
+import { answerOk, answering, call, engine, failedRun, mountBand, runCommand, todo, todos } from './test-support'
 
 const surfaces = ['terminal', 'desktop'] as const
 
@@ -201,6 +201,58 @@ test('a failing test or build command turns the line red, until it passes or a t
   expect(await band.find({ text: '✓' })).toBeDefined()
 })
 
+test('a command that was interrupted, ran into its timeout or went to the background neither turns the line red nor clears it', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  let answer: object = {}
+  answering(on, e => ({ result: {}, text: 'ok', ...(e.tool === 'Bash' && answer) }))
+  const band = await mountBand($, 'terminal')
+  const run = (command: string, extra: object = {}) => call($, { tool: 'Bash', command, ...extra })
+  const red = async () => (await band.find({ text: 'npm test failed' })) !== undefined
+  await call($, { tool: 'TodoWrite', todos: [todo('Step 0', 'in_progress'), todo('Step 1', 'pending')] })
+
+  // measured: the tool answers both with the error flag and the code of the signal that ended the command, then one more line
+  answer = { isError: true, text: 'Exit code 137\n[Request interrupted by user for tool use]' }
+  await run('npm test')
+  expect(await red()).toBe(false)
+  answer = { isError: true, text: 'Exit code 143\nCommand timed out after 1s' }
+  await run('npm test', { timeout: 1000 })
+  expect(await red()).toBe(false)
+
+  // a real failure counts, also when its output names a timeout
+  answer = { isError: true, text: 'Exit code 1\nrun\nCommand timed out after 5s in a test' }
+  await run('npm test')
+  expect(await red()).toBe(true)
+
+  // started in the background: answered at once, without the error flag, before it has run (measured). The red stays.
+  answer = { text: 'Command running in background with ID: b1', result: { backgroundTaskId: 'b1' } }
+  await run('npm test')
+  expect(await red()).toBe(true)
+  answer = {}
+  await run('npm test', { run_in_background: true })
+  expect(await red()).toBe(true)
+
+  // a run that finished with 0 clears it
+  await run('npm test')
+  expect(await red()).toBe(false)
+})
+
+test('a finished list is not turned red by a check that fails after it', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  answering(on, e => ({ result: {}, text: 'ok', ...(e.tool === 'Bash' && failedRun) }))
+  const band = await mountBand($, 'terminal')
+  await call($, { tool: 'TodoWrite', todos: todos(2, 2) })
+  expect(await band.find({ text: 'Done' })).toBeDefined()
+
+  await call($, { tool: 'Bash', command: 'npm test' })
+
+  expect(await band.find({ text: '✕' })).toBeUndefined()
+  expect(await band.find({ text: 'npm test failed' })).toBeUndefined()
+  expect(await band.find({ text: '✓' })).toBeDefined()
+  expect(await band.find({ text: 'Done' })).toBeDefined()
+})
+
 // [command, the check it is named by in the line]
 const CHECKS: [string, string][] = [
   ['npm test', 'npm test'],
@@ -316,7 +368,7 @@ test('two questions at once keep the line yellow until both are answered', async
   expect(await waiting()).toBe(false)
 })
 
-test('a failure in the line never fails the tool call it watches', async ($, on) => {
+test('a call with odd input is answered as the tool answered it (the guard `safely` is not reached by any test)', async ($, on) => {
   mock.clock(on)
   engine(on)
   answerOk(on)

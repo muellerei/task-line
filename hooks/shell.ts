@@ -9,10 +9,52 @@ const CHECK = new RegExp(`^${CHECK_PATTERN}(?![\\w./-])`, 'i')
 // Words that come before the command they start: a shell keyword, an environment assignment, a runner such as `uv run`.
 const BEFORE = new Set(['sudo', 'time', 'nice', 'nohup', 'command', 'exec', 'env', 'bunx', 'if', 'then', 'elif', 'else', 'while', 'until', 'do', '!', '{'])
 
+// The body of a here document is text, not commands: cut from the line after the opener to its terminator, and keep the rest of the
+// opener's own line (`cat <<EOF > f && npm test` still runs the test). A scan, not one regular expression: a pattern that backtracks
+// over the delimiter and then scans on for every opener costs time with the square of the length (64 KB of `<<aaa…` took 2 s). The
+// delimiter is at most 64 characters, only 50 openers are cut, and a delimiter that has no terminator is looked for once. An opener
+// without a terminator, a here-string (`<<<`) and a line break missing after the opener leave the text as it is.
+const MAX_HEREDOCS = 50
+const MAX_DELIMITER = 64
+function withoutHeredocs(line: string): string {
+  const opener = new RegExp(`<<-?[ \\t]*(['"]?)(\\w{1,${MAX_DELIMITER}})\\1`, 'g')
+  const missing = new Set<string>()
+  let out = ''
+  let from = 0
+  let cut = 0
+  for (let found = opener.exec(line); found !== null && cut < MAX_HEREDOCS; found = opener.exec(line)) {
+    const delimiter = found[2]!
+    const end = found.index + found[0].length
+    const lineEnd = line.indexOf('\n', end)
+    if ((found.index > 0 && line[found.index - 1] === '<') || lineEnd === -1 || missing.has(delimiter)) continue
+    let start = lineEnd + 1
+    let stop = -1
+    while (start <= line.length) {
+      const next = line.indexOf('\n', start)
+      const last = next === -1 ? line.length : next
+      if (line.slice(start, last).trim() === delimiter) {
+        stop = last
+        break
+      }
+      if (next === -1) break
+      start = next + 1
+    }
+    if (stop === -1) {
+      missing.add(delimiter)
+      continue
+    }
+    out += line.slice(from, found.index) + line.slice(end, lineEnd)
+    from = stop
+    cut += 1
+    opener.lastIndex = stop
+  }
+  return out + line.slice(from)
+}
+
 // The words of a command line as a shell reads them: quotes group a word and hide separators, an unquoted `;`, `|`, `&`, `(`, `)`,
 // a backtick or a line break ends a command, and the body of a here document is no command.
 export function commandsOf(line: string): string[][] {
-  const text = line.replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g, '')
+  const text = withoutHeredocs(line)
   const commands: string[][] = []
   let words: string[] = []
   let word = ''
@@ -98,5 +140,9 @@ export const failureLabel = (key: string) => (key.includes(JOIN) ? 'check' : key
 export const hasPassed = (key: string, passed: string[]) => key.split(JOIN).every(check => passed.includes(check))
 
 // What the tool answers for a command that ran and exited with a code other than 0 (measured: `Exit code 254`, then the output).
+// A command the person interrupted or that ran into its timeout is answered the same way, with the code of the signal that ended it and
+// one more line (measured: `Exit code 137` and `[Request interrupted by user for tool use]`, `Exit code 143` and `Command timed out
+// after 1s`). That is no result of the check, so it counts as no failure.
 const RAN_AND_FAILED = /^Exit code [1-9]\d*/
-export const ranAndFailed = (text: unknown) => typeof text === 'string' && RAN_AND_FAILED.test(text)
+const CUT_OFF = /^Exit code \d+\n(?:\[Request interrupted|Command timed out)/
+export const ranAndFailed = (text: unknown) => typeof text === 'string' && RAN_AND_FAILED.test(text) && !CUT_OFF.test(text)

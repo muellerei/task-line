@@ -2,7 +2,7 @@
 
 const ELLIPSIS = '…'
 // A name or a subject is cut at this many characters. The engine refuses a tree with more than 100000 characters of text.
-export const SUBJECT_MAX = 200
+const SUBJECT_MAX = 200
 export const LIST_MAX = 60
 
 // Emoji drawn two cells wide that lie outside the wide blocks below (Unicode Emoji_Presentation, as ranges): ✅ and ⭐ are two cells.
@@ -44,6 +44,11 @@ const WIDE_EMOJI: [number, number][] = [
   [0x1f0cf, 0x1f0cf],
   [0x1f18e, 0x1f18e],
   [0x1f191, 0x1f19a],
+  [0x1f200, 0x1f202],
+  [0x1f210, 0x1f23b],
+  [0x1f240, 0x1f248],
+  [0x1f250, 0x1f251],
+  [0x1f260, 0x1f265],
 ]
 
 // Terminal cells one character takes: none for a combining mark or joiner, two for a wide one (CJK, emoji), else one.

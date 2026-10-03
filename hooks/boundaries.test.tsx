@@ -167,7 +167,7 @@ test('a question counts once per call, also when the call fails, and never below
 })
 
 test('TaskCreate without an id still makes distinct items, and TaskUpdate leaves unknown ids and statuses alone', async ($, on) => {
-  const { mount, write } = setup($, on, e => ({ result: e.tool === 'TaskCreate' ? {} : {}, text: 'ok' }))
+  const { mount, write } = setup($, on, () => ({ result: {}, text: 'ok' }))
   const band = await mount()
   await write({ tool: 'TaskCreate', subject: 'First', description: '', activeForm: '' })
   await write({ tool: 'TaskCreate', subject: 'Second', description: '', activeForm: '' })

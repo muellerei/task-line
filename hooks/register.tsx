@@ -6,7 +6,7 @@ import { LIST_MAX, plain, fit } from './cells'
 import { BUILTIN, LINGER_MS, put, statusOf } from './lists'
 import { DEFAULT_COLUMNS, PERCENT_WIDTH, layout, progressOf, rowOf } from './layout'
 import type { Row } from './layout'
-import { checksOf, failureKey, failureLabel, hasPassed, ranAndFailed } from './shell'
+import { checksOf, failureKey, hasPassed, ranAndFailed } from './shell'
 
 const lists = atom({ plugin: 'task-line', key: 'lists' } as const, [] as TaskList[])
 // How many questions or plans wait for the person's answer right now.
@@ -85,6 +85,7 @@ async function touch($: Engine, name: string, change: (tasks: Task[]) => Task[])
 type WorkStateInput = { list?: unknown; fields?: Record<string, unknown> }
 type CreatedResult = { result?: { task?: { id?: unknown } } }
 type UpdatedResult = { result?: { success?: unknown } }
+type BashResult = { result?: { backgroundTaskId?: unknown } }
 type RenderInput = Parameters<Engine['ui']['resolve']>[0] & { surface: string; viewport?: { columns?: number; isFullscreen?: boolean } }
 
 // The rows of the line, or null when there is nothing to show.
@@ -109,7 +110,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, isPlain = fals
   const { label: labelWidth, bar: barWidth, showNote } = layout(rows, columns, canClick && !isPlain)
   const visible = showNote ? rows : rows.map(r => ({ ...r, note: null }))
   const { Box, Button, Text } = $.ui.resolve(e)
-  const dismiss = (name: string) => () => update($, lists, all => all.map(l => (l.name === name ? { ...l, isHidden: true } : l)))
+  const dismiss = (name: string) => () => safely($, 'dismiss', () => update($, lists, all => all.map(l => (l.name === name ? { ...l, isHidden: true } : l))))
 
   // The bar. A terminal draws characters. The desktop app draws a box-drawing character wider than a cell, so a bar of them wrapped into
   // a second line there (found by hand; `overflow` and `height` do not clip it): it draws two boxes with a width in cells and a background.
@@ -270,6 +271,8 @@ export const register: Register = on => {
     const checks = checksOf(String(e.command ?? ''))
     if (checks.length === 0) return r
     if (r.isError && !ranAndFailed(r.text)) return r
+    // A command started in the background is answered at once, without an error flag and before it has run: it neither passed nor failed.
+    if (e.run_in_background === true || typeof (r as BashResult).result?.backgroundTaskId === 'string') return r
     await safely($, 'Bash', () =>
       r.isError
         ? update($, failure, () => failureKey(checks))

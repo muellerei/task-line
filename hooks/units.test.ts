@@ -5,7 +5,7 @@ import { cellsOf, fit, plain, width } from './cells'
 import { layout, progressOf } from './layout'
 import { put } from './lists'
 import { register } from './register'
-import { checkOf, checksOf, commandsOf, failureKey, failureLabel, hasPassed } from './shell'
+import { checkOf, checksOf, commandsOf, failureKey, failureLabel, hasPassed, ranAndFailed } from './shell'
 
 const cp = (code: number) => String.fromCodePoint(code)
 
@@ -68,6 +68,27 @@ test('cellsOf: the first and the last code point on each side of every wide rang
     [0xffe0, 2],
     [0xffe6, 2],
     [0xffe7, 1],
+    // the wide enclosed ideographs and squares between the emoji blocks (East Asian Width W), one cell on each side
+    [0x1f1ff, 1],
+    [0x1f200, 2],
+    [0x1f202, 2],
+    [0x1f203, 1],
+    [0x1f20f, 1],
+    [0x1f210, 2],
+    [0x1f23b, 2],
+    [0x1f23c, 1],
+    [0x1f23f, 1],
+    [0x1f240, 2],
+    [0x1f248, 2],
+    [0x1f249, 1],
+    [0x1f24f, 1],
+    [0x1f250, 2],
+    [0x1f251, 2],
+    [0x1f252, 1],
+    [0x1f25f, 1],
+    [0x1f260, 2],
+    [0x1f265, 2],
+    [0x1f266, 1],
     [0x1f2ff, 1],
     [0x1f300, 2],
     [0x1f600, 2],
@@ -641,6 +662,57 @@ test('checksOf: every check of a line once and in order, and the failure that na
   expect(hasPassed('npm run build + npm test', ['npm run build', 'npm test'])).toBe(true)
   expect(hasPassed('npm test', [])).toBe(false)
   expect(hasPassed('npm test', ['pytest'])).toBe(false)
+})
+
+test('checksOf: the rest of the line that opens a here document is read, its body is not', async () => {
+  const table: [string, string[]][] = [
+    // the check on the line of the opener
+    ['cat <<EOF > f && npm test\nbody\nEOF', ['npm test']],
+    ['python - <<EOF && npm test\nprint(1)\nEOF', ['npm test']],
+    // an empty body, a body that names a check, a here-string that is no here document
+    ['cat <<EOF\nEOF\nnpm test', ['npm test']],
+    ['cat <<EOF\nnpm test\nEOF', []],
+    ['cat <<< "EOF"\nnpm test\nEOF', ['npm test']],
+    // two here documents, then a check
+    ['cat <<A\nx\nA\ncat <<B\npytest\nB\nnpm test', ['npm test']],
+    // no terminator and no line break after the opener: the text stays as it is
+    ['cat <<EOF\nnpm test', ['npm test']],
+    ['cat <<EOF', []],
+  ]
+  for (const [line, checks] of table) expect(checksOf(line), JSON.stringify(line)).toEqual(checks)
+})
+
+test('commandsOf: a line made to cost time is read in time', async () => {
+  // A single pattern that backtracked over the delimiter and scanned on for every opener took 2 seconds for the first of these (64 KB).
+  const lines = [
+    `<<${'a'.repeat(65536)}\n`,
+    '<<a\n'.repeat(16000),
+    Array.from({ length: 5000 }, (_, i) => `<<d${i}\n`).join(''),
+    `${'<<a'.repeat(20000)}\n${'x\n'.repeat(5000)}`,
+  ]
+  for (const line of lines) {
+    const started = Date.now()
+    commandsOf(line)
+    expect(Date.now() - started, `${line.length} characters`).toBeLessThan(500)
+  }
+})
+
+test('ranAndFailed: a command that exited with a code counts, one that was cut off or never ran does not', async () => {
+  // measured: the tool answers an interrupt and a timeout with the code of the signal and one more line
+  const failed = ['Exit code 1\nboom', 'Exit code 254', 'Exit code 1\nrun\nCommand timed out after 5s in a test']
+  const other = [
+    'Exit code 137\n[Request interrupted by user for tool use]',
+    'Exit code 143\nCommand timed out after 1s',
+    'Exit code 0',
+    '<tool_use_error>Blocked: sleep 60 followed by: false.',
+    'ok',
+    '',
+    undefined,
+    null,
+    42,
+  ]
+  for (const text of failed) expect(ranAndFailed(text), JSON.stringify(text)).toBe(true)
+  for (const text of other) expect(ranAndFailed(text), JSON.stringify(text)).toBe(false)
 })
 
 test('the mod hooks four events and none of them is the prompt: what the person types is never read', async () => {
