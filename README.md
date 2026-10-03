@@ -91,7 +91,7 @@ Report problems and ideas as issues at https://github.com/muellerei/task-line/is
 ## Where it draws
 
 - In the band above the prompt. It calls `next(e)` first, so every other mod that draws there keeps its output and the line sits below it.
-- Above the question dialog (`AskUserQuestion`). A question replaces the prompt area, so the band is not drawn then. Only the newest list is shown there: Claude Code refuses a tree with more than 12 rows around the dialog (its debug log says so), and two lists are over that.
+- Above the question dialog (`AskUserQuestion`) in the terminal. A question replaces the prompt area there, so the band is not drawn then. The desktop app keeps the band below its dialog, so nothing is added above it. Only the newest list is shown there: Claude Code refuses a tree with more than 12 rows around the dialog (its debug log says so), and two lists are over that.
 
 The bar takes about 40% of the terminal width, at least 10 and at most 60 characters, and gives way when the row would not fit. The label slot fits the longest label (at least 8 and at most 35% of the width), and wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.
 

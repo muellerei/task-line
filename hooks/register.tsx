@@ -19,8 +19,6 @@ const failure = atom({ plugin: 'task-line', key: 'failure' } as const, null as s
 // The tool of claude-mem's to-do list, whatever the plugin is called in the person's setup: told by how its name ends.
 const WORK_STATE = /^mcp__.+__work_state_write$/
 const NBSP = '\u00a0'
-// A space as wide as a digit.
-const FIGURE_SPACE = '\u2007'
 // The theme color of the bar's empty part: a quiet area.
 const TRACK_COLOR = 'userMessageBackground'
 const MAX_LISTS = 2
@@ -114,20 +112,13 @@ async function lineOf($: Engine, e: RenderInput, columns: number, isPlain = fals
   const dismiss = (name: string) => () => update($, lists, all => all.map(l => (l.name === name ? { ...l, isHidden: true } : l)))
 
   // The bar. A terminal draws characters. The desktop app draws a box-drawing character wider than a cell, so a bar of them wrapped into
-  // a second line there (found by hand; `overflow` and `height` do not clip it): the band draws two boxes with a width in cells and a
-  // background. Around the question dialog the engine refuses a `width`, so there the bar is spaces of the width of a digit (a cell)
-  // on a background.
+  // a second line there (found by hand; `overflow` and `height` do not clip it): it draws two boxes with a width in cells and a background.
   const isDesktop = e.surface === 'desktop'
   const barOf = (r: Row, filled: number) =>
     !isDesktop ? (
       <Box key="bar">
         <Text color={r.color}>{'━'.repeat(filled)}</Text>
         <Text dimColor>{'─'.repeat(barWidth - filled)}</Text>
-      </Box>
-    ) : isPlain ? (
-      <Box key="bar">
-        <Text backgroundColor={r.color}>{FIGURE_SPACE.repeat(filled)}</Text>
-        <Text backgroundColor={TRACK_COLOR}>{FIGURE_SPACE.repeat(barWidth - filled)}</Text>
       </Box>
     ) : (
       <Box key="bar" width={barWidth} flexShrink={0}>
@@ -320,9 +311,11 @@ export const register: Register = on => {
     )
   })
 
-  // A question replaces the prompt area, so the band is not drawn then: the line goes above the dialog instead.
+  // In the terminal a question replaces the prompt area, so the band is not drawn then: the line goes above the dialog instead.
   on('ui.render', { component: 'AskUserQuestion' }, async ($, e, next) => {
     const below = await next(e)
+    // The desktop app keeps the band below its dialog (seen by hand: a line above it showed the list twice).
+    if ((e as RenderInput).surface === 'desktop') return below
     const line = await safely($, 'AskUserQuestion', () => lineOf($, e as RenderInput, (e as RenderInput).viewport?.columns || DEFAULT_COLUMNS, true))
     if (!line) return below
     const { Box } = $.ui.resolve(e)
