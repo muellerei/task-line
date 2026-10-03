@@ -1,0 +1,6 @@
+.DS_Store
+.idea/
+.claude-plugin/types/
+
+# Not in the repository: specs, notes, working material
+local/

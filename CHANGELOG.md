@@ -1,0 +1,62 @@
+# Changelog
+
+All notable changes to task-line are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
+
+## [0.1.0] - 2026-10-03
+
+First version. Tested with Claude Code 2.1.288 in the terminal.
+
+### Fixed
+
+- Two questions open at once keep the line yellow until both are answered. The state was a flag, so the first answer ended it.
+- A command that only names a check no longer turns the line red when it fails: `cat pytest.ini`, `ls tsc/` and `make-dist` are no checks. A check's name must end where the name ends, so `npm run test:unit` still counts.
+- The bar and the percent never show a full list before the list is finished (199 of 200 was shown as 100%), and never show an empty bar once one task is done.
+- Wide characters (CJK, emoji such as ✅ and ⭐) count as two cells, so the bar shrinks to keep the row inside the width.
+- A status such as `constructor` counts as pending and no longer finds a property of `Object`. A blank task name is shown as `Task`. A blank task name or a list name that is no string in `work_state_write` is ignored, and an unknown status keeps the old status of the item. A `TaskCreate` without an id still gets an id of its own.
+- A width that is not a number is read as 100 columns.
+- A check has to be the command that starts. A command line is read as a shell reads it (quotes group a word, `;`, `&&`, `||`, `|` and a line break end a command, a here document is skipped), and what comes before the program is skipped (`FOO=1`, `sudo`, `time`, `env`, `uv run`, `poetry run`, `pipenv run`, `bundle exec`, `pnpm exec`, shell keywords, a path such as `./gradlew`). `echo "run cargo test"` and `grep -r pytest .` no longer turn the line red when they fail, `cd app && npm test` and `FOO=1 uv run pytest -x` still do.
+- Names and subjects are made safe to draw. A control character in a text node makes Claude Code unmount the whole tree and say so only in the debug log. Escape sequences, control characters, invisible characters (bidi controls, zero width spaces, tag characters, the private-use planes with the Kitty placeholder U+10EEEE) are removed, line breaks become spaces, a subject is cut at 200 characters and a list name at 60. The engine refuses a tree with more than 100000 characters of text.
+- A narrow band keeps the row inside the width: the label gives way to a floor of 4 cells, then the note (`npm test failed`, `needs you`) is left out, and the bar stays at its minimum of 10 cells.
+- With two lists the line above the question dialog was not drawn at all (one list showed, two did not, whatever the size of the dialog). Above the dialog only the newest list is shown now. Cause (Claude Code's debug log): the tree was refused with `more than 12 rows around the dialog`, and the engine drew its own dialog. The limit is not documented; found by hand, the dialog cannot be mounted in the test kit.
+- In the desktop app the bar wrapped into a second line, because a box-drawing character is wider than a cell there (`overflow` and `height` do not clip it). The desktop app draws the bar as two boxes with a width in cells and a background now, the terminal keeps the characters. Found by hand.
+- A line that runs several checks (`npm run build && npm test`) named the first of them, whichever failed. It fails as `check failed` now, the failure is kept as the checks joined, and a line that exited with 0 and ran all of them takes it away; one of them passing alone does not. Found in a review.
+- Checked end to end in a terminal without claude-mem (Claude Code 2.1.288, Sonnet 5.5, `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`): a list made with `TaskCreate` and `TaskUpdate` shows the task in progress, the red `npm test failed`, the yellow `needs you` above a question and the finished list going away after 20 seconds. The README says that Claude Code does not offer its todo tools to every model without that variable.
+- A `TaskUpdate` that the tool answered with `success: false` (the host's type names an `error` for it) still changed the task on the line. Nothing changes now. Found while checking the built-in tools against the host's types.
+- `make deploy` and `./gradlew bootRun` counted as checks (`make` and `gradle` matched any target). They count with the target `test`, `build` or `check`, or with none, and the name is the program and its target (`make -j4 test` is `make test`).
+- `✅` and `⭐` and the other emoji below the wide blocks counted one cell, not two.
+- In the desktop app the bar above the question dialog was still made of box-drawing characters. The engine refuses a `width` there, so it is spaces as wide as a digit on a background now. Not yet seen on screen.
+- A row with the `×` button (desktop app, fullscreen terminal) is two cells wider than the layout counted, so at about 58 columns the line wrapped and the button ended up on its own line. The layout now leaves the two cells, and the note `npm test failed` is shown from 46 columns instead of 44 (`needs you` from 40 instead of 38). Found by hand.
+- The `work_state_write` tool is found by how its name ends (`mcp__<plugin>__work_state_write`) and not by one plugin name.
+- A command that was blocked by a hook, refused by the person or cut off by an interrupt no longer turns the line red. Measured for a call blocked by a hook: it comes back with the error flag like a failed command, but its text does not start with `Exit code N`. The text of a call refused by the person (`The user doesn't want to proceed with this tool use`) was seen in a session, not measured through the hook; an interrupt and a timeout are not measured (a timeout moves the call to the background without the error flag). The line turns red only when the text says the command ran and exited with a code other than 0, and a refused call neither sets nor clears a failure.
+- A `work_state_write` list is closed when Claude closes it (a write with the status `done` and no task): the line lets it go and the next task of that name starts a new list. A finished list that has faded (20 seconds after its last task, or hidden with the button) is over as well, and a task that comes to its name starts a new list; while it is still shown a new task joins it. Found by hand: a name used again and again had grown into one list of 16 tasks, 13 of them done.
+- A key kept for a wait that could not be started with a timer no longer keeps the list from being hidden.
+
+### Changed
+
+- The mod is split into modules: `cells` (cell widths, cutting, safe names), `shell` (reading command lines, the checks), `lists` (statuses, putting a change into a list), `layout` (what a row shows and how wide its parts are) and `register` (state, hooks, drawing). The bar is drawn in one place, and the default width is one constant.
+- The line's own work in the hooks is guarded: an error there is logged for debugging and never reaches the tool call the hook watches.
+- A finished list that has faded is dropped from the state when another list is touched, and the wait to hide a list is scheduled once per list, not at every redraw. A list holds at most 500 tasks and the 20 newest lists are kept, so the state does not grow without end.
+- `/task-line` runs while Claude is busy, and is guarded like the other hooks.
+- The README says from which version mods are on, names the tested version, shows the screenshots in Markdown syntax and explains how commands are read and what is cleaned.
+
+### Added
+
+- One line per task list above the prompt: the current task, a bar that grows with finished tasks, the count and the percent. A finished list goes away after 20 seconds.
+- Lists are filled from `TodoWrite`, `TaskCreate` and `TaskUpdate`, and from `work_state_write` (one list per `list`; the to-do tool of the optional claude-mem plugin). Calls from subagents, refused calls and failed calls are ignored.
+- Yellow state with `needs you` while Claude waits for an answer to `AskUserQuestion` or `ExitPlanMode`. The line is also drawn above the question dialog, where the band above the prompt is not shown.
+- Red state with the name of the check (`npm test failed`) when a test, build, lint or typecheck command fails. It clears when the same check passes or a task of the list changes status. Recognized commands: `npm`, `pnpm`, `yarn`, `bun`, `just`, `task`, `deno`, `pytest`, `jest`, `vitest`, `mocha`, `tsc`, `eslint`, `ruff`, `mypy`, `pyright`, `rspec`, `phpunit`, `cargo`, `go`, `make`, `gradle`, `gradlew`, `mvn`, `dotnet` and `claude plugin test` or `validate`.
+- The bar takes 40% of the terminal width (10 to 60 characters), the label slot fits the longest label (at most 35% of the width).
+- `/task-line` hides and shows the line. A `×` button hides one list until it changes again, drawn where there is a click (desktop app, fullscreen terminal).
+- The band calls `next(e)` first, so other mods that draw above the prompt keep their output.
+- Tests for the list sources, width, the finished list going away, the question state, failing checks (a table of commands) and the hide controls.
+- The README says that the mod does not watch what you type, and a test keeps the promise: it fails when a hook on another event than tool calls, session start, the command and the drawing is added.
+- README sections for three examples to try, troubleshooting and support (issues), and a statement of what the mod does not read, as the directory policy asks.
+- Unit tests of the pure functions with their limits (`cellsOf`, `width`, `fit`, `progressOf`, `layout`, `put`, `checkOf`) and tests of the line at its limits (the ends of the bar and the percent, the 20 seconds to the millisecond, the number of lists, odd statuses and task names, `TaskCreate` and `TaskUpdate`, `work_state_write`, concurrent questions, failed checks).
+- Type check with TypeScript 5 in strict mode and Prettier formatting, both clean. The code and the tests have no `any`; the tests cast the host's inputs in one place, `hooks/test-support.tsx`.
+- Tests for the findings of other mods' fixes: cleaning of names (escape sequences, controls, invisible characters, the cut at 200 and 60), how commands are read (words, quotes, separators, here documents, wrappers, look-alikes), the layout at every width from 0 to 300 (the row fits wherever it can), the caps on lists and tasks, and the tool name of `work_state_write`. A hand-made mutation probe (faults built into a copy of the code) found all but two; those two are equivalent in behavior (the hide at exactly 20 seconds, which the timer reaches at the same moment) or cannot be reached from a test (a damaged time stamp in the state).
+
+### Known limits
+
+- The plan approval (`ExitPlanMode`) has no render component of its own, so the line is not drawn there.
+- The desktop app was checked by hand for the line, the bar, the `×` button and the colors of a finished and of a failed list; the yellow state above the question dialog was seen in the terminal only.
+- The question dialog cannot be mounted in the test kit, so its look is checked in a session only.

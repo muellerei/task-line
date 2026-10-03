@@ -1,0 +1,14 @@
+{
+  "name": "task-line",
+  "version": "0.1.0",
+  "description": "One clean line per task list above the prompt, filled from Claude's own todo tools, same look in the terminal and the desktop app",
+  "author": {
+    "name": "Patrick Müller",
+    "url": "https://github.com/muellerei"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/muellerei/task-line",
+  "repository": "https://github.com/muellerei/task-line",
+  "keywords": ["claude-code-mod", "task-list", "progress", "statusline"],
+  "types": "./types/index.d.ts"
+}

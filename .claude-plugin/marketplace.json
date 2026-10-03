@@ -1,0 +1,12 @@
+{
+  "name": "muellerei-mods",
+  "owner": { "name": "Patrick Müller" },
+  "description": "Claude Code mods by muellerei.",
+  "plugins": [
+    {
+      "name": "task-line",
+      "source": "./",
+      "description": "One clean line per task list above the prompt, filled from Claude's own todo tools."
+    }
+  ]
+}
