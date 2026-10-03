@@ -1,6 +1,23 @@
 .DS_Store
 .idea/
+node_modules/
 .claude-plugin/types/
 
 # Not in the repository: specs, notes, working material
 local/
+
+# Agent working instructions: names local paths and habits that have no
+# business in a published repository.
+CLAUDE.md
+.claude/
+
+# Credentials
+.env
+.env.*
+
+# Editors
+.vscode/
+*.swp
+
+# Logs
+*.log
