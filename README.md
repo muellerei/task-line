@@ -4,6 +4,8 @@ One clean line per task list above the Claude Code prompt, filled from Claude's 
 
 Nothing on the line is made up or measured by the mod: it reads the todo list that Claude Code keeps for the work. It is a Claude Code mod (a plugin of function hooks).
 
+New here? Ideas, questions and a quick "works on my setup" are all welcome. Here's how: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```text
 ● Write the tests    ━━━━━━━━━━━━━━━━━━━━────────────────────  2/5   40%
 ? Ship it            ━━━━━━━━━━━━━━━━━━━━────────────────────  2/5   40%  needs you
@@ -90,7 +92,7 @@ Three things to say to Claude, each shows one state of the line:
 
 ## Support
 
-Report problems and ideas as issues at https://github.com/muellerei/task-line/issues. Say which Claude Code version and surface (terminal, desktop app) you use, and what the line showed.
+Report problems and ideas as issues at https://github.com/muellerei/task-line/issues, or start a discussion at https://github.com/muellerei/task-line/discussions. Say which Claude Code version and surface (terminal, desktop app) you use, and what the line showed. If you would like to help, [CONTRIBUTING.md](CONTRIBUTING.md) is the place to start.
 
 ## What it reads
 
@@ -185,13 +187,7 @@ A `work_state_write` list stays as long as its name is in use: when Claude close
 
 ## Develop
 
-```bash
-claude plugin validate .
-claude plugin test .
-claude --plugin-dir .          # lays the engine's types into .claude-plugin/types for the editor and tsc
-npx -p typescript@5 tsc -p .
-npx prettier@3 --check hooks types
-```
+The commands to build and check a change, and the reason for each, are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-check).
 
 The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button and `/task-line`. The question dialog itself cannot be mounted in the test kit, so its look is only checked in a session.
 
