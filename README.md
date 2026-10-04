@@ -2,7 +2,7 @@
 
 One clean line per task list above the Claude Code prompt, filled from Claude's own todo tools. You do not operate it.
 
-It is a Claude Code mod (a plugin of function hooks).
+Nothing on the line is made up or measured by the mod: it reads the todo list that Claude Code keeps for the work. It is a Claude Code mod (a plugin of function hooks).
 
 ```text
 ● Write the tests    ━━━━━━━━━━━━━━━━━━━━────────────────────  2/5   40%
@@ -55,7 +55,7 @@ Or from a shell: `claude plugin marketplace add muellerei/task-line`, then `clau
 | Background and cloud sessions, any model | yes | nothing |
 | Newer models (for example Sonnet 5.5) | **no**, left out since Claude Code 2.1.268 | set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (Claude Code 2.1.233 or later), for example with [enable-todo-tools](https://github.com/muellerei/enable-todo-tools), or use a tool named `work_state_write` for the lists |
 
-[enable-todo-tools](https://github.com/muellerei/enable-todo-tools) is a small companion mod that sets that variable when a session starts, so the todo tools are on without touching your settings. It is a separate mod on purpose: task-line only reads the lists Claude keeps and creates none, while the variable makes Claude keep lists, which costs extra turns. Install it only if you want that. It does not need task-line, and task-line does not need it.
+[enable-todo-tools](https://github.com/muellerei/enable-todo-tools) is a separate companion mod that sets that variable when a session starts, so the todo tools are on without touching your settings. Install it only if you want that: Claude then keeps lists, which costs extra turns. It does not need task-line, and task-line does not need it.
 
 Details under [What it reads](#what-it-reads).
 
@@ -97,7 +97,7 @@ Calls from subagents, calls that were refused and calls that failed are ignored.
 
 Claude Code leaves its task tools out on newer models because they keep track of multi-step work without a written checklist (Claude Code's documentation, [Task tool availability](https://code.claude.com/docs/en/tools-reference#task-tool-availability)). With `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` Claude keeps the list with `TaskCreate` and `TaskUpdate`, and `TodoWrite` only with `CLAUDE_CODE_ENABLE_TASKS=0`. A `work_state_write` tool can come with instructions that make Claude keep its lists there instead of with the built-in tools, and the line reads those lists too.
 
-**Where the data comes from.** Nothing on the line is made up or measured by the mod. The tasks are the todo list Claude Code itself keeps for the work (its own todo tools, or a `work_state_write` to-do list tool), and the mod reads them as Claude writes them. The count and the percent are finished tasks over all tasks of that list, so the bar is only as good as Claude's list: it is no estimate of time or effort. A red line comes from a test or build command Claude ran that exited with an error code (a command that a hook blocked, you refused, an interrupt or a timeout cut off, or that went to the background never counts), a yellow one from a question Claude asked you. The mod runs no commands and reads no files itself (see [Privacy](#privacy)).
+**Where the data comes from.** The tasks are the todo list Claude Code itself keeps for the work (its own todo tools, or a `work_state_write` to-do list tool), and the mod reads them as Claude writes them. The count and the percent are finished tasks over all tasks of that list, so the bar is only as good as Claude's list: it is no estimate of time or effort. A red line comes from a test or build command Claude ran that exited with an error code (which commands count is under [Failing checks](#failing-checks)), a yellow one from a question Claude asked you. The mod runs no commands and reads no files itself (see [Privacy](#privacy)).
 
 ## Failing checks
 
@@ -121,35 +121,58 @@ A failing test or build command turns the newest list red (a list that is alread
 - A command that you interrupted, that ran into its timeout or that was started in the background does not count either, and neither turns the line red nor clears it.
 - A line that runs several checks (`npm run build && npm test`) fails as `check failed`: the exit code is one for the whole line, so the line cannot tell which of them failed.
 - A check in front of a pipe or `|| true` (`npm test | tail -5`) is not seen: the line gets the exit code the shell reports for the whole line (the last command of a pipe, unless `pipefail` is set), so a line that exits with 0 takes a red one away.
-- The line does not understand a `#` comment (`echo hi # && pytest` still counts as a pytest run) and reads a `<<` inside quotes as a here document. Both only change what the line shows.
+- The line does not understand a `#` comment and reads a `<<` inside quotes as a here document, which only changes what it shows. Examples in [How a command is read](docs/failing-checks.md).
 - The line goes back when the same check passes again (other arguments are fine), when a line that exited with 0 ran all the checks of the failure, or when the list changes: a task moves on, a task is added or one is removed.
 - A question to you (yellow) wins over a failed check.
 
-## Where it draws
-
-- In the band above the prompt. It calls `next(e)` first, so every other mod that draws there keeps its output and the line sits below it.
-- Above the question dialog (`AskUserQuestion`) in the terminal. A question replaces the prompt area there, so the band is not drawn then. The desktop app keeps the band below its dialog, so nothing is added above it. Only the newest list is shown there: Claude Code refuses a tree with more than 12 rows around the dialog (its debug log says so), and two lists are over that.
-
-## Good to know
+## Behavior and limits
 
 - The lists belong to the session: `/clear`, `/resume` and `/branch` start with none, a reload of the mod keeps them.
-- A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar never gets shorter than 10 cells.
+- At most two lists are drawn in the band, the newest ones. A third active list is kept, but not shown. Above a question dialog in the terminal only the newest list is shown; the desktop app keeps the band below its dialog.
+- A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar keeps its minimum length (see [Limits](#limits)).
 - `/task-line` also works while Claude is busy.
-- Another mod that draws in the band above the prompt without calling `next(e)` hides the other mods' output, this one included, and the other way round. The documentation names the tiers of the chain (managed mods, installed mods, then built-in ones), not the order of two installed mods that do not depend on each other. Mods that call `next(e)` (like this one) coexist.
+- A mod that draws in the band above the prompt without calling `next(e)` and this one hide each other's output. More in [Where and how the line draws](docs/behavior.md).
 - A plan approval (`ExitPlanMode`) has no render component of its own, so the line is not drawn there. The yellow state is set while the plan waits, but only the question dialog shows it.
-- Checked by hand in the terminal. In the desktop app the line, the bar, the `×` button and the colors of a finished (green) and of a failed (red) list were checked by hand; the yellow state above the question dialog was seen in the terminal only. The desktop app draws the bar as two filled areas, the terminal as characters.
-- At most two lists are drawn in the band, the newest ones. A third active list is kept, but not shown.
 - Colors are theme colors (`success`, `warning`, `error`, `claude`, `inactive`), so they follow your theme. In some themes `success` is not green.
 
 ## Privacy
 
-The mod sees the `Bash` commands Claude runs and the task names of the lists. It keeps the lists and the name of a failed check in the mod's session state, nothing else of a command. It reads and writes no files and makes no network calls itself. It does not read Claude's memory, the chat history, summaries or your files: it sees the inputs of tool calls Claude makes, and of a result only what it needs: of a `Bash` result the error flag, whether the text starts with `Exit code` and a number (and is not an interrupt or a timeout), and whether a background task started; of a `TaskCreate` result the id of the new task; of a `TaskUpdate` result whether it succeeded; of every result whether the call was refused or failed. It does not watch what you type: it hooks the tool calls Claude makes, the start of a session, the command `/task-line` (whose arguments it does not read) and the drawing of the line, and no event of your prompt or your messages. Of a question to you it knows only that one is open, not your answer. A test fails when a hook on another event is added.
+A test fails when a hook on another event is added.
+
+- The mod sees the `Bash` commands Claude runs and the task names of the lists. It keeps the lists and the name of a failed check in the mod's session state, nothing else of a command.
+- It reads and writes no files and makes no network calls itself. It does not read Claude's memory, the chat history, summaries or your files.
+- It sees the inputs of tool calls Claude makes, and of a result only what it needs:
+  - of a `Bash` result the error flag, whether the text starts with `Exit code` and a number (and is not an interrupt or a timeout), and whether a background task started
+  - of a `TaskCreate` result the id of the new task
+  - of a `TaskUpdate` result whether it succeeded
+  - of every result whether the call was refused or failed
+- It does not watch what you type: it hooks the tool calls Claude makes, the start of a session, the command `/task-line` (whose arguments it does not read) and the drawing of the line, and no event of your prompt or your messages.
+- Of a question to you it knows only that one is open, not your answer.
 
 ## Details
 
-- The bar takes about 40% of the terminal width, at least 10 and at most 60 characters, and gives way when the row would not fit. The label slot fits the longest label (wanting at least 8 and at most 35% of the width, and giving way down to 4 cells when the row is narrow), and wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.
-- Names and subjects are made safe to draw. Escape sequences and invisible characters (bidi controls, zero width spaces, the private-use planes) are removed, other control characters and line breaks become spaces, and a name is cut at 200 characters (a list name at 60). A list holds 500 tasks and the 20 newest lists are kept.
-- A `work_state_write` list stays as long as its name is in use: when Claude closes it (a write with the status `done` and no task) the line lets it go, and the next task of that name starts a new list. A finished list that has faded (20 seconds after its last task, or hidden with `×`) is over as well: a task that comes to its name then starts a new list. A task that comes while the finished list is still shown joins it, so that adding one task, finishing it and adding the next keeps the progress. Without both rules a name used again and again would grow into one list of everything it ever held.
+### Limits
+
+| What | Value | Constant | Pinned by |
+| --- | --- | --- | --- |
+| Bar width | about 40% of the width, at least 10 and at most 60 characters, and it gives way when the row would not fit | `BAR_SHARE`, `BAR_MIN`, `BAR_MAX` (`layout.ts`) | `units.test.ts`, the `layout` tests |
+| Label slot | as long as the longest label, at least 8 and at most 35% of the width, down to 4 when the row is narrow | `LABEL_MIN`, `LABEL_SHARE`, `LABEL_FLOOR` (`layout.ts`) | `units.test.ts`, the `layout` tests |
+| Task subject | cut at 200 characters | `SUBJECT_MAX` (`cells.ts`) | `units.test.ts`, the `plain` test |
+| List name | cut at 60 characters | `LIST_MAX` (`cells.ts`) | `boundaries.test.tsx`, the `work_state_write` name test |
+| Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
+| Lists kept | the 20 newest | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
+| Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists |
+| A finished list stays | 20 seconds | `LINGER_MS` (`lists.ts`) | `boundaries.test.tsx`, the test to the millisecond |
+
+Wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.
+
+### Names and subjects
+
+Names and subjects are made safe to draw. Escape sequences and invisible characters (bidi controls, zero width spaces, the private-use planes) are removed, and other control characters and line breaks become spaces.
+
+### Lists of `work_state_write`
+
+A `work_state_write` list stays as long as its name is in use: when Claude closes it (a write with the status `done` and no task) the line lets it go, and the next task of that name starts a new list. A finished list that has faded (20 seconds after its last task, or hidden with `×`) is over as well: a task that comes to its name then starts a new list. A task that comes while the finished list is still shown joins it, so that adding one task, finishing it and adding the next keeps the progress. Without both rules a name used again and again would grow into one list of everything it ever held.
 
 ## Develop
 

@@ -4,7 +4,7 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [0.1.0] - 2026-10-03
 
-First version. Tested with Claude Code 2.1.288 in the terminal. The checks of an interrupt, a timeout and a background start were repeated with 2.1.289.
+First version. Tested with Claude Code 2.1.288 in the terminal. The checks of an interrupt, a timeout and a background start were repeated with 2.1.289. In the desktop app the line, the bar, the `×` button and the colors of a finished (green) and of a failed (red) list were checked by hand; the yellow state above the question dialog was seen in the terminal only.
 
 ### Fixed
 

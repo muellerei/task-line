@@ -27,14 +27,8 @@ Options between the program and its subcommand are skipped: `npm --prefix app te
 
 ## Interrupt, timeout, background
 
-A command that you interrupted, that ran into its timeout or that was started in the background does not count, and neither turns the line red nor clears it. What the tool reports (measured):
+A command that you interrupted, that ran into its timeout, that was started in the background, that a hook blocked or that you refused does not count, and neither turns the line red nor clears it. What the tool reports (measured):
 
 - an interrupt: `Exit code 137` and a line that says so
 - a timeout: `Exit code 143` and a line that says so
 - a background start: an answer at once, before the command has run
-
-## Several checks in one line, pipes
-
-A line that runs several checks (`npm run build && npm test`) fails as `check failed`: the exit code is one for the whole line, so the line cannot tell which of them failed.
-
-The same holds for a check in front of a pipe or `|| true` (`npm test | tail -5`). The line gets the exit code the shell reports for the whole line (the last command of a pipe, unless `pipefail` is set), so a failing check there is not seen, and a line that exits with 0 takes a red one away.
