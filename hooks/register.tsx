@@ -3,7 +3,9 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 
 import type { Task, TaskList } from '../types'
 import { LIST_MAX, plain, fit } from './cells'
-import { BUILTIN, LINGER_MS, put, statusOf } from './lists'
+import { timingOf } from './config'
+import { BUILTIN, put, statusOf } from './lists'
+import type { Timing } from './lists'
 import { DEFAULT_COLUMNS, PERCENT_WIDTH, layout, progressOf, rowOf } from './layout'
 import type { Row } from './layout'
 import { checksOf, failureKey, hasPassed, ranAndFailed } from './shell'
@@ -67,18 +69,18 @@ function hideLater($: Engine, name: string, stamp: number, ms: number) {
 }
 
 // Applies the change, and once every task is done hides the list after a short while.
-async function touch($: Engine, name: string, change: (tasks: Task[]) => Task[]) {
+async function touch($: Engine, name: string, timing: Timing, change: (tasks: Task[]) => Task[]) {
   const statuses = (list?: TaskList) => list?.tasks.map(t => t.status).join(',') ?? ''
   const now = await $.clock.now()
   const before = statuses((await read($, lists)).find(l => l.name === name))
-  await update($, lists, all => put(all, name, change, now))
+  await update($, lists, all => put(all, name, change, timing, now))
   const list = (await read($, lists)).find(l => l.name === name)
   // A task moved on: the failure belonged to the step before.
   if (statuses(list) !== before) await update($, failure, () => null)
   if (!list || list.tasks.some(t => t.status !== 'done')) return
   const stamp = await $.clock.now()
   await update($, lists, all => all.map(l => (l.name === name ? { ...l, doneAt: stamp } : l)))
-  hideLater($, name, stamp, LINGER_MS)
+  hideLater($, name, stamp, timing.lingerMs)
 }
 
 // What the mod reads of inputs and results the engine's own types do not name (tools of other plugins, the viewport of a dialog).
@@ -89,17 +91,19 @@ type BashResult = { result?: { backgroundTaskId?: unknown } }
 type RenderInput = Parameters<Engine['ui']['resolve']>[0] & { surface: string; viewport?: { columns?: number; isFullscreen?: boolean } }
 
 // The rows of the line, or null when there is nothing to show.
-async function lineOf($: Engine, e: RenderInput, columns: number, isPlain = false) {
+async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing, isPlain = false) {
   if (await read($, isOff)) return null
   // A finished list is judged by its age, not by a timer alone: a reload of this module drops timers, the state stays.
   const now = await $.clock.now()
   const age = (l: TaskList) => (typeof l.doneAt === 'number' && Number.isFinite(l.doneAt) ? now - l.doneAt : 0)
   // Above the question dialog only the newest list is drawn. With two rows Claude Code refuses the tree and draws no line at all (its
   // debug log: "more than 12 rows around the dialog"); one row passes. Found by hand, the limit is not documented.
-  const shown = (await read($, lists)).filter(l => !l.isHidden && l.tasks.length > 0 && age(l) < LINGER_MS).slice(isPlain ? -1 : -MAX_LISTS)
+  const shown = (await read($, lists))
+    .filter(l => !l.isHidden && l.tasks.length > 0 && (l.doneAt === null || age(l) < timing.lingerMs))
+    .slice(isPlain ? -1 : -MAX_LISTS)
   if (shown.length === 0) return null
   // A render may not write state: the hide runs just after, once the wait is over.
-  for (const l of shown) if (l.doneAt !== null && Number.isFinite(l.doneAt)) hideLater($, l.name, l.doneAt, LINGER_MS - age(l))
+  for (const l of shown) if (l.doneAt !== null && Number.isFinite(l.doneAt)) hideLater($, l.name, l.doneAt, timing.lingerMs - age(l))
 
   const asking = (await read($, questions)) > 0
   const failed = await read($, failure)
@@ -197,13 +201,15 @@ async function whileAsked<T>($: Engine, tool: string, agentId: string | undefine
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const timing = timingOf(options)
+
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
     const r = await next(e)
     if (!counts(e, r) || !Array.isArray(e.todos)) return r
     const todos = e.todos
     await safely($, 'TodoWrite', () =>
-      touch($, BUILTIN, () => todos.map((todo, i) => ({ id: `todo${i}`, subject: plain(todo?.content), status: statusOf(todo?.status, 'pending') }))),
+      touch($, BUILTIN, timing, () => todos.map((todo, i) => ({ id: `todo${i}`, subject: plain(todo?.content), status: statusOf(todo?.status, 'pending') }))),
     )
     return r
   })
@@ -214,7 +220,7 @@ export const register: Register = on => {
     // The id the tool answers with is the one TaskUpdate names; without one the item still gets an id of its own.
     const made = (r as CreatedResult).result?.task?.id ?? e.tool_use_id
     await safely($, 'TaskCreate', () =>
-      touch($, BUILTIN, tasks => [...tasks, { id: String(made ?? `created${tasks.length}`), subject: plain(e.subject), status: 'pending' }]),
+      touch($, BUILTIN, timing, tasks => [...tasks, { id: String(made ?? `created${tasks.length}`), subject: plain(e.subject), status: 'pending' }]),
     )
     return r
   })
@@ -225,7 +231,7 @@ export const register: Register = on => {
     if (!counts(e, r) || (r as UpdatedResult).result?.success === false) return r
     const id = String(e.taskId)
     await safely($, 'TaskUpdate', () =>
-      touch($, BUILTIN, tasks =>
+      touch($, BUILTIN, timing, tasks =>
         e.status === 'deleted'
           ? tasks.filter(t => t.id !== id)
           : tasks.map(t =>
@@ -246,12 +252,12 @@ export const register: Register = on => {
     // The state of the list itself: claude-mem closes a list when it is written with the status done and no task. The line lets the
     // list go, so that the next task of that name starts a new one and does not grow a list of everything the name ever held.
     if (fields?.task === undefined && fields?.status === 'done') {
-      await safely($, 'work_state_write', () => touch($, name, () => []))
+      await safely($, 'work_state_write', () => touch($, name, timing, () => []))
       return r
     }
     if (!task) return r
     await safely($, 'work_state_write', () =>
-      touch($, name, tasks => {
+      touch($, name, timing, tasks => {
         const old = tasks.find(t => t.id === task)
         const status = statusOf(fields?.status, old?.status ?? 'pending')
         const item: Task = { id: task, subject: task, status }
@@ -304,7 +310,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const below = await next(e)
     if (e.props.hasSurvey) return below
-    const line = await safely($, 'AbovePrompt', () => lineOf($, e as RenderInput, e.props.bodyColumns || DEFAULT_COLUMNS))
+    const line = await safely($, 'AbovePrompt', () => lineOf($, e as RenderInput, e.props.bodyColumns || DEFAULT_COLUMNS, timing))
     if (!line) return below
     const { Box } = $.ui.resolve(e)
     return (
@@ -320,7 +326,7 @@ export const register: Register = on => {
     const below = await next(e)
     // The desktop app keeps the band below its dialog (seen by hand: a line above it showed the list twice).
     if ((e as RenderInput).surface === 'desktop') return below
-    const line = await safely($, 'AskUserQuestion', () => lineOf($, e as RenderInput, (e as RenderInput).viewport?.columns || DEFAULT_COLUMNS, true))
+    const line = await safely($, 'AskUserQuestion', () => lineOf($, e as RenderInput, (e as RenderInput).viewport?.columns || DEFAULT_COLUMNS, timing, true))
     if (!line) return below
     const { Box } = $.ui.resolve(e)
     return (
