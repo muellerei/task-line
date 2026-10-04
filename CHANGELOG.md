@@ -2,6 +2,12 @@
 
 All notable changes to task-line are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Two settings in the `/config` menu: `lingerSeconds` (how long a finished list stays in the line) and `joinSeconds` (how long a new task of the same name still joins it). A new task joins a finished list only while the list is shown. A number outside 0 to 120 seconds is set to the nearest. The limits are set in the code and not with `min` and `max` in `plugin.json`, because the plugin test kit refuses to load a plugin whose option breaks one of them (not tried in the host). `0` never shows a finished list, or never joins one. Both default to 20 seconds, as before. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
+
 ## [0.1.0] - 2026-10-03
 
 First version. Tested with Claude Code 2.1.288 in the terminal. The checks of an interrupt, a timeout and a background start were repeated with 2.1.289. In the desktop app the line, the bar, the `×` button and the colors of a finished (green) and of a failed (red) list were checked by hand; the yellow state above the question dialog was seen in the terminal only.

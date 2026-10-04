@@ -1,6 +1,7 @@
 import { test, expect, mock } from 'claude-code/testing'
 
-import { answerOk, answering, call, engine, failedRun, mountBand, runCommand, todo, todos } from './test-support'
+import { answerOk, answering, call, engine, failedRun, has, mountBand, runCommand, todo, todos, WORK_STATE } from './test-support'
+import type { TestEngine } from './test-support'
 
 const surfaces = ['terminal', 'desktop'] as const
 
@@ -510,4 +511,134 @@ test('a finished list that has faded is forgotten, the next item of that list st
   expect(await has('release: Publish')).toBe(true)
   expect(await has('0/1')).toBe(true)
   expect(await has('1/2')).toBe(false)
+})
+
+// One item of a claude-mem list, as the tool call says it.
+const item = ($: TestEngine, list: string, task: string, status: string) => call($, { tool: WORK_STATE, list, fields: { task, status } })
+
+test('lingerSeconds sets how long a finished list stays', { options: { lingerSeconds: 5 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await call($, { tool: 'TodoWrite', todos: todos(3, 3) })
+  await clock.advance(4_000)
+  expect(await has(band, '3/3')).toBe(true)
+  await clock.advance(2_000)
+  expect(await has(band, '3/3')).toBe(false)
+})
+
+test('a shorter lingerSeconds also ends the time a new item joins the finished list', { options: { lingerSeconds: 5 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await item($, 'release', 'Tag it', 'done')
+  await clock.advance(6_000)
+  await item($, 'docs', 'Check links', 'doing')
+  await item($, 'release', 'Publish', 'todo')
+  expect(await has(band, 'release: Publish')).toBe(true)
+  expect(await has(band, '0/1')).toBe(true)
+  expect(await has(band, '1/2')).toBe(false)
+})
+
+test('without settings a finished list stays 20 seconds and a new item joins it for as long', async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  // This number is typed on purpose: the test falls when the default in plugin.json changes, and so asks for a CHANGELOG entry.
+  await item($, 'release', 'Tag it', 'done')
+  await clock.advance(19_999)
+  expect(await has(band, '1/1')).toBe(true)
+  await item($, 'release', 'Publish', 'todo')
+  expect(await has(band, '1/2')).toBe(true)
+  await item($, 'release', 'Publish', 'done')
+  await clock.advance(20_000)
+  expect(await has(band, '2/2')).toBe(false)
+  await item($, 'release', 'Ship', 'todo')
+  expect(await has(band, '0/1')).toBe(true)
+})
+
+test('a longer lingerSeconds keeps the finished list shown, also in a band drawn later', { options: { lingerSeconds: 30 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await call($, { tool: 'TodoWrite', todos: todos(3, 3) })
+  await clock.advance(25_000)
+  // The test kit does not draw a band again after the clock moved: a band mounted now is the one that tells.
+  expect(await has(await mountBand($, 'terminal'), '3/3')).toBe(true)
+  await clock.advance(5_000)
+  expect(await has(band, '3/3')).toBe(false)
+})
+
+test('joinSeconds sets how long a new item still joins a finished list that is shown', { options: { lingerSeconds: 100, joinSeconds: 10 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await item($, 'release', 'Tag it', 'done')
+  await clock.advance(5_000)
+  await item($, 'release', 'Publish', 'todo')
+  expect(await has(band, '1/2')).toBe(true)
+  await item($, 'release', 'Publish', 'done')
+  await clock.advance(11_000)
+  // still shown (100 s), but no longer inside the 10 s to join
+  expect(await has(band, '2/2')).toBe(true)
+  await item($, 'release', 'Ship', 'todo')
+  expect(await has(band, '0/1')).toBe(true)
+  expect(await has(band, '2/3')).toBe(false)
+})
+
+test('another finished list stays as long as it is shown, however short the join time', { options: { lingerSeconds: 100, joinSeconds: 10 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await item($, 'release', 'Tag it', 'done')
+  await clock.advance(30_000)
+  await item($, 'docs', 'Check links', 'doing')
+  expect(await has(band, '✓')).toBe(true)
+  expect(await has(band, 'docs: Check links')).toBe(true)
+})
+
+test('lingerSeconds of 0 never shows a finished list, a running one stays', { options: { lingerSeconds: 0 } }, async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'terminal')
+
+  await call($, { tool: 'TodoWrite', todos: todos(3, 1) })
+  expect(await has(band, '1/3')).toBe(true)
+  await call($, { tool: 'TodoWrite', todos: todos(3, 3) })
+  expect(await has(band, '3/3')).toBe(false)
+  expect(await has(band, 'engine')).toBe(true)
+})
+
+test('the settings reach TaskCreate and TaskUpdate, the built-in todo tools', { options: { lingerSeconds: 60, joinSeconds: 60 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  let id = 0
+  answering(on, e => ({ result: e.tool === 'TaskCreate' ? { task: { id: String(++id) } } : {}, text: 'ok' }))
+  const band = await mountBand($, 'terminal')
+  const create = (subject: string) => call($, { tool: 'TaskCreate', subject, description: '', activeForm: '' })
+
+  await create('First')
+  await call($, { tool: 'TaskUpdate', taskId: '1', status: 'completed' })
+  // the timer of a finished list runs for lingerSeconds, not for the default
+  await clock.advance(20_000)
+  expect(await has(band, '1/1')).toBe(true)
+  // a new task joins for joinSeconds, not for the default
+  await create('Second')
+  expect(await has(band, '1/2')).toBe(true)
+  await call($, { tool: 'TaskUpdate', taskId: '2', status: 'completed' })
+  await clock.advance(16_000)
+  expect(await has(band, '2/2')).toBe(true)
 })

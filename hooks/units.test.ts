@@ -2,8 +2,10 @@ import { test, expect } from 'claude-code/testing'
 
 import type { Task, TaskList } from '../types'
 import { cellsOf, fit, plain, width } from './cells'
+import { settingToMs, timingOf } from './config'
 import { layout, progressOf } from './layout'
 import { put } from './lists'
+import type { Timing } from './lists'
 import { register } from './register'
 import { checkOf, checksOf, commandsOf, failureKey, failureLabel, hasPassed, ranAndFailed } from './shell'
 
@@ -244,41 +246,45 @@ const list = (name: string, tasks: number, extra: Partial<TaskList> = {}): TaskL
   ...extra,
 })
 
+// 20 seconds for both times: the edges of the tests below (19_999 and 20_000 ms) hang on this number.
+const TWENTY_SECONDS: Timing = { lingerMs: 20_000, joinMs: 20_000 }
+
 test('put: the touched list moves to the end, an empty result drops it, faded finished lists are forgotten', async () => {
   const keep = (tasks: Task[]) => tasks
   // a new list is appended
-  expect(put([], 'a', () => list('a', 1).tasks).map(l => l.name)).toEqual(['a'])
-  expect(put([list('a', 1)], 'b', () => list('b', 1).tasks).map(l => l.name)).toEqual(['a', 'b'])
+  expect(put([], 'a', () => list('a', 1).tasks, TWENTY_SECONDS).map(l => l.name)).toEqual(['a'])
+  expect(put([list('a', 1)], 'b', () => list('b', 1).tasks, TWENTY_SECONDS).map(l => l.name)).toEqual(['a', 'b'])
   // the touched list moves to the end, and starts visible and unfinished
-  const moved = put([list('a', 1, { doneAt: 5 }), list('b', 1)], 'a', keep)
+  const moved = put([list('a', 1, { doneAt: 5 }), list('b', 1)], 'a', keep, TWENTY_SECONDS)
   expect(moved.map(l => l.name)).toEqual(['b', 'a'])
   expect(moved[1]).toMatchObject({ doneAt: null, isHidden: false })
   // the change sees the tasks held, none for a list that is not there
   let seen: unknown = 'unset'
-  put([], 'a', tasks => ((seen = tasks), []))
+  put([], 'a', tasks => ((seen = tasks), []), TWENTY_SECONDS)
   expect(seen).toEqual([])
-  put([list('a', 2)], 'a', tasks => ((seen = tasks.length), tasks))
+  put([list('a', 2)], 'a', tasks => ((seen = tasks.length), tasks), TWENTY_SECONDS)
   expect(seen).toBe(2)
   // no tasks left: the list is gone, the others stay
-  expect(put([list('a', 1), list('b', 1)], 'a', () => []).map(l => l.name)).toEqual(['b'])
-  expect(put([], 'a', () => [])).toEqual([])
+  expect(put([list('a', 1), list('b', 1)], 'a', () => [], TWENTY_SECONDS).map(l => l.name)).toEqual(['b'])
+  expect(put([], 'a', () => [], TWENTY_SECONDS)).toEqual([])
   // another list that is hidden and finished is dropped; hidden but unfinished (dismissed), or finished but not yet hidden, stay
   const dropped = put(
     [list('done', 1, { isHidden: true, doneAt: 1 }), list('dismissed', 1, { isHidden: true }), list('fresh', 1, { doneAt: 1 })],
     'x',
     () => list('x', 1).tasks,
+    TWENTY_SECONDS,
   )
   expect(dropped.map(l => l.name)).toEqual(['dismissed', 'fresh', 'x'])
   // the touched list itself, hidden and finished, is over: a task that comes to its name starts a new list
-  const back = put([list('a', 3, { isHidden: true, doneAt: 1 })], 'a', tasks => [...tasks, ...list('b', 1).tasks])
+  const back = put([list('a', 3, { isHidden: true, doneAt: 1 })], 'a', tasks => [...tasks, ...list('b', 1).tasks], TWENTY_SECONDS)
   expect(back).toHaveLength(1)
   expect(back[0]?.tasks).toHaveLength(1)
   expect(back[0]).toMatchObject({ isHidden: false, doneAt: null })
   // hidden but not finished (dismissed with the button) carries on
-  expect(put([list('a', 3, { isHidden: true })], 'a', tasks => [...tasks, ...list('b', 1).tasks])[0]?.tasks).toHaveLength(4)
+  expect(put([list('a', 3, { isHidden: true })], 'a', tasks => [...tasks, ...list('b', 1).tasks], TWENTY_SECONDS)[0]?.tasks).toHaveLength(4)
   // faded by age: finished 20000 ms before now and more are over, 19999 is still shown, no time known is not faded
   const finished = (doneAt: number | null) => [list('a', 3, { doneAt })]
-  const grown = (all: TaskList[], now?: number) => put(all, 'a', tasks => [...tasks, ...list('b', 1).tasks], now)[0]?.tasks.length
+  const grown = (all: TaskList[], now?: number) => put(all, 'a', tasks => [...tasks, ...list('b', 1).tasks], TWENTY_SECONDS, now)[0]?.tasks.length
   expect(grown(finished(1000), 20_999)).toBe(4)
   expect(grown(finished(1000), 21_000)).toBe(1)
   expect(grown(finished(1000), 21_001)).toBe(1)
@@ -287,13 +293,67 @@ test('put: the touched list moves to the end, an empty result drops it, faded fi
   expect(grown(finished(null), 1e12)).toBe(4)
   expect(grown(finished(0), 20_000)).toBe(1)
   // the same holds for the lists beside it
-  expect(put([list('x', 1, { doneAt: 1000 }), list('y', 1, { doneAt: 1000 })], 'z', () => list('z', 1).tasks, 21_000).map(l => l.name)).toEqual(['z'])
-  expect(put([list('x', 1, { doneAt: 1000 }), list('y', 1, { doneAt: 1000 })], 'z', () => list('z', 1).tasks, 20_999).map(l => l.name)).toEqual(['x', 'y', 'z'])
+  expect(put([list('x', 1, { doneAt: 1000 }), list('y', 1, { doneAt: 1000 })], 'z', () => list('z', 1).tasks, TWENTY_SECONDS, 21_000).map(l => l.name)).toEqual(
+    ['z'],
+  )
+  expect(put([list('x', 1, { doneAt: 1000 }), list('y', 1, { doneAt: 1000 })], 'z', () => list('z', 1).tasks, TWENTY_SECONDS, 20_999).map(l => l.name)).toEqual(
+    ['x', 'y', 'z'],
+  )
   // the list given is left as it was
   const before = [list('a', 1), list('b', 1)]
   const snapshot = JSON.stringify(before)
-  put(before, 'a', () => [])
+  put(before, 'a', () => [], TWENTY_SECONDS)
   expect(JSON.stringify(before)).toBe(snapshot)
+})
+
+test('put: a new task joins a finished list that is shown and not older than the join time, and never one that is not shown', async () => {
+  const grown = (timing: Timing, now: number) =>
+    put([list('a', 3, { doneAt: 1000 })], 'a', tasks => [...tasks, ...list('b', 1).tasks], timing, now)[0]?.tasks.length
+  // shown for 100 s, joins for 20 s: the join time ends first
+  const long: Timing = { lingerMs: 100_000, joinMs: 20_000 }
+  expect(grown(long, 20_999)).toBe(4)
+  expect(grown(long, 21_000)).toBe(1)
+  // shown for 5 s, joins for 20 s: no timer has hidden the list (as after a reload), but it is not shown any more, so nothing joins it
+  const short: Timing = { lingerMs: 5_000, joinMs: 20_000 }
+  expect(grown(short, 5_999)).toBe(4)
+  expect(grown(short, 6_000)).toBe(1)
+  // a join time of 0: nothing joins
+  expect(grown({ lingerMs: 20_000, joinMs: 0 }, 1000)).toBe(1)
+  // the lists beside it stay as long as they are shown, not as long as a task joins
+  const beside = (now: number) => put([list('x', 1, { doneAt: 1000 })], 'z', () => list('z', 1).tasks, long, now).map(l => l.name)
+  expect(beside(100_999)).toEqual(['x', 'z'])
+  expect(beside(101_000)).toEqual(['z'])
+})
+
+test('settingToMs: a number is set to 0 up to 120 seconds, anything else is the fallback, never a 0 or a 1 by accident', async () => {
+  const table: [unknown, number][] = [
+    [15, 15_000],
+    [5, 5_000],
+    [2.5, 2_500],
+    [0.0004, 0],
+    [0.0006, 1],
+    [0, 0],
+    [-1, 0],
+    [120, 120_000],
+    [121, 120_000],
+    // not a number, or not one a time can be: the fallback, 20 seconds
+    [Number.NaN, 20_000],
+    [undefined, 20_000],
+    ['abc', 20_000],
+    // what `Number(...)` would turn into 0, 1 or 5
+    ['', 20_000],
+    [null, 20_000],
+    [false, 20_000],
+    [[], 20_000],
+    [true, 20_000],
+    ['5', 20_000],
+    [[5], 20_000],
+    [{}, 20_000],
+    [Number.POSITIVE_INFINITY, 20_000],
+    [Number.NEGATIVE_INFINITY, 20_000],
+  ]
+  for (const [raw, ms] of table) expect([raw, settingToMs(raw)]).toEqual([raw, ms])
+  expect(timingOf({ lingerSeconds: 5, joinSeconds: 10 })).toEqual({ lingerMs: 5_000, joinMs: 10_000 })
 })
 
 test('checkOf: names the check, in lower case and with single spaces, and finds nothing in look-alikes', async () => {
@@ -654,8 +714,8 @@ test('layout: the label gives way before the bar, the note goes before the row w
 test('put: at most 20 lists and 500 tasks a list are kept, the oldest lists go first', async () => {
   const many = (n: number) => Array.from({ length: n }, (_, i) => list(`l${i}`, 1))
   // 19 others and the touched one are 20: nothing goes. 20 others and the touched one are 21: the oldest goes.
-  expect(put(many(19), 'x', () => list('x', 1).tasks)).toHaveLength(20)
-  const full = put(many(20), 'x', () => list('x', 1).tasks)
+  expect(put(many(19), 'x', () => list('x', 1).tasks, TWENTY_SECONDS)).toHaveLength(20)
+  const full = put(many(20), 'x', () => list('x', 1).tasks, TWENTY_SECONDS)
   expect(full).toHaveLength(20)
   expect(full.map(l => l.name)).toEqual([
     ...many(20)
@@ -663,22 +723,22 @@ test('put: at most 20 lists and 500 tasks a list are kept, the oldest lists go f
       .map(l => l.name),
     'x',
   ])
-  expect(put(many(60), 'x', () => list('x', 1).tasks).map(l => l.name)).toEqual([
+  expect(put(many(60), 'x', () => list('x', 1).tasks, TWENTY_SECONDS).map(l => l.name)).toEqual([
     ...many(60)
       .slice(41)
       .map(l => l.name),
     'x',
   ])
   // touching a list that is held does not count it twice
-  const again = put(many(20), 'l5', tasks => tasks)
+  const again = put(many(20), 'l5', tasks => tasks, TWENTY_SECONDS)
   expect(again).toHaveLength(20)
   expect(again.at(-1)?.name).toBe('l5')
   expect(again[0]?.name).toBe('l0')
   // the tasks of one list
-  expect(put([], 'a', () => list('a', 499).tasks)[0]?.tasks).toHaveLength(499)
-  expect(put([], 'a', () => list('a', 500).tasks)[0]?.tasks).toHaveLength(500)
-  expect(put([], 'a', () => list('a', 501).tasks)[0]?.tasks).toHaveLength(500)
-  expect(put([], 'a', () => list('a', 5000).tasks)[0]?.tasks.at(-1)?.id).toBe('a499')
+  expect(put([], 'a', () => list('a', 499).tasks, TWENTY_SECONDS)[0]?.tasks).toHaveLength(499)
+  expect(put([], 'a', () => list('a', 500).tasks, TWENTY_SECONDS)[0]?.tasks).toHaveLength(500)
+  expect(put([], 'a', () => list('a', 501).tasks, TWENTY_SECONDS)[0]?.tasks).toHaveLength(500)
+  expect(put([], 'a', () => list('a', 5000).tasks, TWENTY_SECONDS)[0]?.tasks.at(-1)?.id).toBe('a499')
 })
 
 test('checksOf: every check of a line once and in order, and the failure that names them', async () => {

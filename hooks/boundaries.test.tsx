@@ -3,6 +3,9 @@ import { test, expect, mock } from 'claude-code/testing'
 import { answering, barCells, call, engine, exactly, failedRun, filled, has, mountBand, runCommand, todo, todos, WORK_STATE } from './test-support'
 import type { TestEngine, TestOn } from './test-support'
 
+// Both times 20 seconds: the tests that count to the millisecond hang on this number, not on the default.
+const TWENTY_SECONDS = { options: { lingerSeconds: 20, joinSeconds: 20 } }
+
 // The engine's own drawing, the clock and a tool that answers with whatever `answer` returns.
 function setup($: TestEngine, on: TestOn, answer: Parameters<typeof answering>[1] = () => ({ result: {}, text: 'ok' })) {
   const clock = mock.clock(on)
@@ -100,7 +103,7 @@ test('lists that do not fit: no list, no todos, todos that are no list', async (
   expect(await has(band, '0/1')).toBe(true)
 })
 
-test('the finished list stays for 20 seconds to the millisecond, and a list that goes on is not hidden by the old timer', async ($, on) => {
+test('the finished list stays for 20 seconds to the millisecond, and a list that goes on is not hidden by the old timer', TWENTY_SECONDS, async ($, on) => {
   const { clock, mount, write } = setup($, on)
   const band = await mount()
   await write({ tool: 'TodoWrite', todos: todos(1, 1) })
@@ -574,7 +577,7 @@ test('work_state_write with the status done and no task closes the list, so the 
   expect(await has(band, 'plan: ')).toBe(false)
 })
 
-test('a finished list that has faded and gets a new task starts again, one that is still shown or unfinished grows', async ($, on) => {
+test('a finished list that has faded and gets a new task starts again, one that is still shown or unfinished grows', TWENTY_SECONDS, async ($, on) => {
   let id = 0
   const { clock, mount, write } = setup($, on, e => ({ result: e.tool === 'TaskCreate' ? { task: { id: String(++id) } } : {}, text: 'ok' }))
   const band = await mount()

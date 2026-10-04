@@ -13,7 +13,7 @@ Nothing on the line is made up or measured by the mod: it reads the todo list th
 
 ## What you see
 
-A line shows the task Claude is working on, a bar that grows with finished tasks, the count and the percent. It turns yellow with `needs you` while Claude waits for your answer to a question, red with the name of the check when a test or build command fails, and green when the list is finished. A finished list goes away after 20 seconds.
+A line shows the task Claude is working on, a bar that grows with finished tasks, the count and the percent. It turns yellow with `needs you` while Claude waits for your answer to a question, red with the name of the check when a test or build command fails, and green when the list is finished. A finished list goes away after the time `lingerSeconds` sets (see [Settings](#settings)).
 
 Cut from real terminal screenshots (dark theme, fullscreen, so the `×` button shows):
 
@@ -64,6 +64,15 @@ Details under [What it reads](#what-it-reads).
 - `/task-line` hides the line and shows it again. The lists keep being filled while it is hidden.
 - `×` at the end of a line hides that list until it changes again. The button is drawn where there is a click: in the desktop app and in a fullscreen terminal. A terminal band has none.
 
+## Settings
+
+Two settings, in the `/config` menu:
+
+- `lingerSeconds`: how long a finished list stays in the line, in seconds. `0` never shows a finished list.
+- `joinSeconds`: how long after a list finished a new task of the same name still joins it, in seconds. `0` never joins. A task joins only while the list is shown, so a shorter `lingerSeconds` shortens this too: after that time a new task starts a new list (`0/1`, not `3/4`).
+
+A value outside the allowed range is set to the nearest allowed one. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
+
 ## Try it
 
 Three things to say to Claude, each shows one state of the line:
@@ -74,7 +83,7 @@ Three things to say to Claude, each shows one state of the line:
 
 ## Troubleshooting
 
-- **No line.** Ask Claude to "make a todo list with three tasks": if it answers that it has no todo tool, there is nothing for the line to read (see [Requirements](#requirements)). If it does have the tool, the usual reason is that Claude keeps no list for the work at hand: the line shows only the list Claude writes, it moves only when Claude changes a task's status, and what a subagent does is not shown. A short question or a single step makes no list. Ask for one at the start, or tell Claude in your `CLAUDE.md` to keep a todo list for work with several steps. Mods need Claude Code 2.1.287 or later. Run `/reload-plugins`, then `claude plugin validate` on the plugin folder. A finished list goes away after 20 seconds, a list you closed with `×` comes back with the next change to it, and `/task-line` may have hidden the line (it says `Task line hidden.` or `Task line shown.`).
+- **No line.** Ask Claude to "make a todo list with three tasks": if it answers that it has no todo tool, there is nothing for the line to read (see [Requirements](#requirements)). If it does have the tool, the usual reason is that Claude keeps no list for the work at hand: the line shows only the list Claude writes, it moves only when Claude changes a task's status, and what a subagent does is not shown. A short question or a single step makes no list. Ask for one at the start, or tell Claude in your `CLAUDE.md` to keep a todo list for work with several steps. Mods need Claude Code 2.1.287 or later. Run `/reload-plugins`, then `claude plugin validate` on the plugin folder. A finished list goes away after the time `lingerSeconds` sets, a list you closed with `×` comes back with the next change to it, and `/task-line` may have hidden the line (it says `Task line hidden.` or `Task line shown.`).
 - **No red after a failed command.** Only a check that ran and exited with a code other than 0 counts, a finished list is never red, and a command refused by you or by a hook is no failure.
 - **Only one list above a question.** Claude Code refuses a larger tree around the dialog, so the newest list is shown there.
 - **The bar wraps or looks cut.** Report the width of the window and whether it is the terminal or the desktop app.
@@ -85,7 +94,7 @@ Report problems and ideas as issues at https://github.com/muellerei/task-line/is
 
 ## What it reads
 
-The line is filled from tool calls Claude already makes, so there is nothing to configure and no extra instruction in the prompt:
+The line is filled from tool calls Claude already makes, so it needs no extra instruction in the prompt:
 
 | Source | Use |
 | --- | --- |
@@ -162,7 +171,7 @@ A test fails when a hook on another event is added.
 | Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
 | Lists kept | the 20 newest | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
 | Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists |
-| A finished list stays | 20 seconds | `LINGER_MS` (`lists.ts`) | `boundaries.test.tsx`, the test to the millisecond |
+| Settings `lingerSeconds` and `joinSeconds` | 0 to 120 seconds, a value outside is set to the nearest | `SETTING_MAX_SECONDS` (`config.ts`) | `units.test.ts`, the `settingToMs` test |
 
 Wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.
 
@@ -172,7 +181,7 @@ Names and subjects are made safe to draw. Escape sequences and invisible charact
 
 ### Lists of `work_state_write`
 
-A `work_state_write` list stays as long as its name is in use: when Claude closes it (a write with the status `done` and no task) the line lets it go, and the next task of that name starts a new list. A finished list that has faded (20 seconds after its last task, or hidden with `×`) is over as well: a task that comes to its name then starts a new list. A task that comes while the finished list is still shown joins it, so that adding one task, finishing it and adding the next keeps the progress. Without both rules a name used again and again would grow into one list of everything it ever held.
+A `work_state_write` list stays as long as its name is in use: when Claude closes it (a write with the status `done` and no task) the line lets it go, and the next task of that name starts a new list. A finished list that has faded (no longer shown after the time `lingerSeconds` sets, or hidden with `×`) is over as well: a task that comes to its name then starts a new list. A task that comes while the finished list is still shown, and not later than `joinSeconds` after it finished, joins it, so that adding one task, finishing it and adding the next keeps the progress. Without both rules a name used again and again would grow into one list of everything it ever held.
 
 ## Develop
 
@@ -184,7 +193,7 @@ npx -p typescript@5 tsc -p .
 npx prettier@3 --check hooks types
 ```
 
-The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the 20 seconds to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button and `/task-line`. The question dialog itself cannot be mounted in the test kit, so its look is only checked in a session.
+The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button and `/task-line`. The question dialog itself cannot be mounted in the test kit, so its look is only checked in a session.
 
 ## License
 
