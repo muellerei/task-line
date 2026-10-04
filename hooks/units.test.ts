@@ -317,6 +317,24 @@ test('checkOf: names the check, in lower case and with single spaces, and finds 
     ['make clean test', 'make test'],
     ['./gradlew clean build', 'gradlew build'],
     ['./gradlew', 'gradlew'],
+    ['make -j 4', 'make'],
+    ['make test:unit', 'make test'],
+    ['mvn test:unit', 'mvn test'],
+    ['make -C src', 'make'],
+    ['make -f Makefile', 'make'],
+    ['make CC=gcc', 'make'],
+    ['make -C build test', 'make test'],
+    ['make -j 4 test', 'make test'],
+    ['gradle -p app test', 'gradle test'],
+    ['mvn clean verify', 'mvn verify'],
+    ['mvn -q test', 'mvn test'],
+    ['mvn -pl app test', 'mvn test'],
+    ['./mvnw test', 'mvnw test'],
+    ['npm --prefix app test', 'npm test'],
+    ['pnpm -r test', 'pnpm test'],
+    ['pnpm --filter x build', 'pnpm build'],
+    ['yarn workspace a test', 'yarn test'],
+    ['cargo +nightly test', 'cargo test'],
     ['./gradlew test', 'gradlew test'],
     ['gradle check', 'gradle check'],
     ['CLAUDE PLUGIN TEST .', 'claude plugin test'],
@@ -360,6 +378,17 @@ test('checkOf: names the check, in lower case and with single spaces, and finds 
     'make-dist',
     'make deploy',
     'make install',
+    'make -C build install',
+    'mvn',
+    'mvn -v',
+    'make testing',
+    'mvn -f test clean',
+    'make -C test install',
+    'make CC=gcc install',
+    'gradle -p test bootRun',
+    'npm --prefix test install',
+    'pnpm --filter build add x',
+    'mvn -pl test clean',
     './gradlew bootRun',
     'gradle clean',
     'cat tsc.log',
@@ -506,6 +535,17 @@ test('commandsOf: words as a shell reads them, a separator outside quotes ends a
     ['(a; b)', [['a'], ['b']]],
     ['x `a` y', [['x'], ['a'], ['y']]],
     ['a\\ b', [['a b']]],
+    [
+      'cd app && \\\n  npm test',
+      [
+        ['cd', 'app'],
+        ['npm', 'test'],
+      ],
+    ],
+    ['FOO=1 \\\n  pytest', [['FOO=1', 'pytest']]],
+    ['npm \\\ntest', [['npm', 'test']]],
+    ['ab\\\ncd', [['abcd']]],
+    ["echo 'a\\\nb'", [['echo', 'a\\\nb']]],
     ['echo "a\\"b"', [['echo', 'a"b']]],
     ["echo 'a\\b'", [['echo', 'a\\b']]],
     ['echo "abc', [['echo', 'abc']]],
@@ -646,6 +686,8 @@ test('checksOf: every check of a line once and in order, and the failure that na
   expect(checksOf('cd app && npm test')).toEqual(['npm test'])
   expect(checksOf('npm test; npm test')).toEqual(['npm test'])
   expect(checksOf('echo hi | grep pytest')).toEqual([])
+  expect(checksOf('cd app && \\\n  npm test')).toEqual(['npm test'])
+  expect(checksOf('npm run build && \\\n  npm test')).toEqual(['npm run build', 'npm test'])
   expect(checksOf('')).toEqual([])
   expect(checkOf('npm run build && npm test')).toBe('npm run build')
 
@@ -675,6 +717,12 @@ test('checksOf: the rest of the line that opens a here document is read, its bod
     ['cat <<< "EOF"\nnpm test\nEOF', ['npm test']],
     // two here documents, then a check
     ['cat <<A\nx\nA\ncat <<B\npytest\nB\nnpm test', ['npm test']],
+    // a line of the body that only starts like the delimiter ends nothing, an opener inside the body is body
+    ['cat <<EOF\nEOFX\nnpm test\nEOF', []],
+    ["cat >s.sh <<'EOF'\nrun <<INNER && npm test\nbody\nINNER\nEOF", []],
+    // no limit on how many here documents or how long a delimiter: the body after them is still no command
+    [`${'cat <<A\nx\nA\n'.repeat(60)}cat <<L\nnpm test\nL`, []],
+    [`cat <<${'d'.repeat(70)}\nnpm test\n${'d'.repeat(70)}`, []],
     // no terminator and no line break after the opener: the text stays as it is
     ['cat <<EOF\nnpm test', ['npm test']],
     ['cat <<EOF', []],
@@ -687,7 +735,9 @@ test('commandsOf: a line made to cost time is read in time', async () => {
   const lines = [
     `<<${'a'.repeat(65536)}\n`,
     '<<a\n'.repeat(16000),
-    Array.from({ length: 5000 }, (_, i) => `<<d${i}\n`).join(''),
+    Array.from({ length: 20000 }, (_, i) => `<<d${i}\n`).join(''),
+    '<<a '.repeat(250000),
+    'cat <<A\nx\nA\n'.repeat(100000),
     `${'<<a'.repeat(20000)}\n${'x\n'.repeat(5000)}`,
   ]
   for (const line of lines) {

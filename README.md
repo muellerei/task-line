@@ -82,20 +82,21 @@ A failing test or build command turns the newest list red (a list that is alread
 | `npm`, `pnpm`, `yarn`, `bun` | `test`, `build`, `lint`, `typecheck` or `check` |
 | `just`, `task` | `test`, `build`, `check` or `lint` |
 | `deno` | `test`, `check` or `lint` |
-| `make`, `gradle`, `gradlew` | the target `test`, `build` or `check`, or no target at all (`make -j4`); `make deploy` and `./gradlew bootRun` are no checks |
+| `make`, `gradle`, `gradlew` | the target `test`, `build` or `check` among the options (`make -C build test`), or no target at all (`make -j 4`); `make deploy`, `make -C build install` and `./gradlew bootRun` are no checks |
 | `pytest` (also `python -m pytest`), `jest`, `vitest`, `mocha`, `tsc`, `eslint`, `ruff`, `mypy`, `pyright`, `rspec`, `phpunit`, `claude plugin test`/`validate` | any call |
 | `cargo` | `test`, `build`, `check` or `clippy` |
 | `go` | `test`, `build` or `vet` |
-| `mvn` | `test`, `package` or `verify` |
+| `mvn`, `mvnw` | the goal `test`, `package` or `verify`, also after other goals (`mvn clean verify`); `mvn clean` is no check |
 | `dotnet` | `test` or `build` |
 
-- A check has to be the command that starts. The line reads a command as a shell does: quotes group, `;`, `&&`, `||`, `|` and a line break end a command, a here document is skipped (the rest of the line that opens it is read, `cat <<EOF > f && npm test` runs the test).
+- A check has to be the command that starts. The line reads a command as a shell does: quotes group, `;`, `&&`, `||`, `|` and a line break end a command, a backslash before a line break joins two lines, a here document is skipped (the rest of the line that opens it is read, `cat <<EOF > f && npm test` runs the test).
 - Two things the line does not understand: a `#` comment (`echo hi # && pytest` still counts as a pytest run) and a `<<` inside quotes (`echo "<<A"` is read as the start of a here document). Both only change what the line shows, the output of the command is in front of you anyway.
+- Options between the program and its subcommand are skipped: `npm --prefix app test`, `pnpm -r test`, `pnpm --filter web build`, `yarn workspace web test` and `cargo +nightly test` count. A word that an option takes as its value is no subcommand or target (`make -C build install` is no check). Only the options the line knows take a value; an unknown option followed by a word is read as a flag.
 - What comes before the program is skipped: `FOO=1`, `sudo`, `time`, `env`, `uv run`, `poetry run`, `bundle exec`, `pnpm exec`. So `cd app && npm test` and `FOO=1 uv run pytest -x` count.
 - The name has to end there: `npm run test:unit` counts, while `cat pytest.ini`, `ls tsc/`, `make-dist`, `echo "run cargo test"` and `grep -r pytest .` never do.
 - Any other failing command (a `grep` with no match for one) never counts, and neither does a command run by a subagent.
 - A command that you interrupted, that ran into its timeout or that was started in the background does not count either, and neither turns the line red nor clears it. The tool answers an interrupt with `Exit code 137` and a line that says so, a timeout with `Exit code 143` and a line that says so, and a background start at once, before the command has run (measured).
-- A line that runs several checks (`npm run build && npm test`) fails as `check failed`: the exit code is one for the whole line, so the line cannot tell which of them failed.
+- A line that runs several checks (`npm run build && npm test`) fails as `check failed`: the exit code is one for the whole line, so the line cannot tell which of them failed. The same holds for a check in front of a pipe or `|| true` (`npm test | tail -5`): the line gets the exit code the shell reports for the whole line (the last command of a pipe, unless `pipefail` is set), so a failing check there is not seen, and a line that exits with 0 takes a red one away.
 - The line goes back when the same check passes again (other arguments are fine), when a line that exited with 0 ran all the checks of the failure, or when the list changes: a task moves on, a task is added or one is removed.
 - A question to you (yellow) wins over a failed check.
 
@@ -114,7 +115,7 @@ Three things to say to Claude, each shows one state of the line:
 
 ## Troubleshooting
 
-- **No line.** Ask Claude to "make a todo list with three tasks": if it answers that it has no todo tool, there is nothing for the line to read (see [Requirements](#requirements)). Mods need Claude Code 2.1.287 or later. Run `/reload-plugins`, then `claude plugin validate` on the plugin folder. A finished list goes away after 20 seconds, a list you closed with `×` comes back with the next change to it, and `/task-line` may have hidden the line (it says `Task line hidden.` or `Task line shown.`).
+- **No line.** Ask Claude to "make a todo list with three tasks": if it answers that it has no todo tool, there is nothing for the line to read (see [Requirements](#requirements)). If it does have the tool, the usual reason is that Claude keeps no list for the work at hand: the line shows only the list Claude writes, it moves only when Claude changes a task's status, and what a subagent does is not shown. A short question or a single step makes no list. Ask for one at the start, or tell Claude in your `CLAUDE.md` to keep a todo list for work with several steps. Mods need Claude Code 2.1.287 or later. Run `/reload-plugins`, then `claude plugin validate` on the plugin folder. A finished list goes away after 20 seconds, a list you closed with `×` comes back with the next change to it, and `/task-line` may have hidden the line (it says `Task line hidden.` or `Task line shown.`).
 - **No red after a failed command.** Only a check that ran and exited with a code other than 0 counts, a finished list is never red, and a command refused by you or by a hook is no failure.
 - **Only one list above a question.** Claude Code refuses a larger tree around the dialog, so the newest list is shown there.
 - **The bar wraps or looks cut.** Report the width of the window and whether it is the terminal or the desktop app.

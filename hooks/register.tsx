@@ -13,7 +13,7 @@ const lists = atom({ plugin: 'task-line', key: 'lists' } as const, [] as TaskLis
 const questions = atom({ plugin: 'task-line', key: 'questions' } as const, 0)
 // Switched off with /task-line: no line is drawn, the lists keep being filled.
 const isOff = atom({ plugin: 'task-line', key: 'isOff' } as const, false)
-// The check (`npm test`, `pytest`, ...) whose last run failed, until it passes or a task changes status.
+// The check (`npm test`, `pytest`, ...) whose last run failed, until it passes or the statuses of a list change (a task moves on, is added or removed).
 const failure = atom({ plugin: 'task-line', key: 'failure' } as const, null as string | null)
 
 // The tool of claude-mem's to-do list, whatever the plugin is called in the person's setup: told by how its name ends.
@@ -262,9 +262,10 @@ export const register: Register = on => {
   })
 
   // A check that fails turns the line red; the same check passing again turns it back. Other commands never count. A result with the
-  // error flag is a failure only when the command ran: its text then starts with `Exit code N`. A call that a hook blocked, the
-  // person refused or an interrupt cut off also comes with the error flag (measured), but with another text, and says nothing
-  // about the check: it neither turns the line red nor takes the red away.
+  // error flag is a failure only when the command ran: its text then starts with `Exit code N`. A call that a hook blocked or the
+  // person refused also comes with the error flag (measured), but with another text. An interrupt or a timeout comes with
+  // `Exit code 137` or `143` and one more line, which `ranAndFailed` reads as cut off. None of them says anything about the check:
+  // it neither turns the line red nor takes the red away.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const r = await next(e)
     if (e.agentId !== undefined || r.deny !== undefined) return r
