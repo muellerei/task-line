@@ -66,10 +66,10 @@ Details under [What it reads](#what-it-reads).
 
 ## Settings
 
-Two settings, in the `/config` menu:
+Two settings, in the `/config` menu under task-line:
 
-- `lingerSeconds`: how long a finished list stays in the line, in seconds. `0` never shows a finished list.
-- `joinSeconds`: how long after a list finished a new task of the same name still joins it, in seconds. `0` never joins. A task joins only while the list is shown, so a shorter `lingerSeconds` shortens this too: after that time a new task starts a new list (`0/1`, not `3/4`).
+- `lingerSeconds`, listed as `Finished list stays (seconds)`: how long a finished list stays in the line, in seconds. `0` never shows a finished list.
+- `joinSeconds`, listed as `New task joins (seconds)`: how long after a list finished a new task of the same name still joins it, in seconds. `0` never joins. A task joins only while the list is shown, so a shorter `lingerSeconds` shortens this too: after that time a new task starts a new list (`0/1`, not `3/4`).
 
 A value outside the allowed range is set to the nearest allowed one. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
 
