@@ -5,7 +5,7 @@ import type { Timing } from './lists'
 const SETTING_MAX_SECONDS = 120
 // The default of plugin.json, for a value that is no number. The host checks the type before it loads the mod, so this is a second line
 // of defence; the tests pin it and the default of plugin.json to the same value.
-const SETTING_FALLBACK_SECONDS = 20
+const SETTING_FALLBACK_SECONDS = 15
 
 // Not `Number(raw)`: it turns an empty text, null and an empty list into 0 ("never show"), true into 1 and "5" into 5.
 export const settingToMs = (raw: unknown): number => {

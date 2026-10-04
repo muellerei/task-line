@@ -544,7 +544,7 @@ test('a shorter lingerSeconds also ends the time a new item joins the finished l
   expect(await has(band, '1/2')).toBe(false)
 })
 
-test('without settings a finished list stays 20 seconds and a new item joins it for as long', async ($, on) => {
+test('without settings a finished list stays 15 seconds and a new item joins it for as long', async ($, on) => {
   const clock = mock.clock(on)
   engine(on)
   answerOk(on)
@@ -552,12 +552,12 @@ test('without settings a finished list stays 20 seconds and a new item joins it 
 
   // This number is typed on purpose: the test falls when the default in plugin.json changes, and so asks for a CHANGELOG entry.
   await item($, 'release', 'Tag it', 'done')
-  await clock.advance(19_999)
+  await clock.advance(14_999)
   expect(await has(band, '1/1')).toBe(true)
   await item($, 'release', 'Publish', 'todo')
   expect(await has(band, '1/2')).toBe(true)
   await item($, 'release', 'Publish', 'done')
-  await clock.advance(20_000)
+  await clock.advance(15_000)
   expect(await has(band, '2/2')).toBe(false)
   await item($, 'release', 'Ship', 'todo')
   expect(await has(band, '0/1')).toBe(true)

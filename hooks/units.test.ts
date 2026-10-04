@@ -336,21 +336,21 @@ test('settingToMs: a number is set to 0 up to 120 seconds, anything else is the 
     [-1, 0],
     [120, 120_000],
     [121, 120_000],
-    // not a number, or not one a time can be: the fallback, 20 seconds
-    [Number.NaN, 20_000],
-    [undefined, 20_000],
-    ['abc', 20_000],
+    // not a number, or not one a time can be: the fallback, 15 seconds
+    [Number.NaN, 15_000],
+    [undefined, 15_000],
+    ['abc', 15_000],
     // what `Number(...)` would turn into 0, 1 or 5
-    ['', 20_000],
-    [null, 20_000],
-    [false, 20_000],
-    [[], 20_000],
-    [true, 20_000],
-    ['5', 20_000],
-    [[5], 20_000],
-    [{}, 20_000],
-    [Number.POSITIVE_INFINITY, 20_000],
-    [Number.NEGATIVE_INFINITY, 20_000],
+    ['', 15_000],
+    [null, 15_000],
+    [false, 15_000],
+    [[], 15_000],
+    [true, 15_000],
+    ['5', 15_000],
+    [[5], 15_000],
+    [{}, 15_000],
+    [Number.POSITIVE_INFINITY, 15_000],
+    [Number.NEGATIVE_INFINITY, 15_000],
   ]
   for (const [raw, ms] of table) expect([raw, settingToMs(raw)]).toEqual([raw, ms])
   expect(timingOf({ lingerSeconds: 5, joinSeconds: 10 })).toEqual({ lingerMs: 5_000, joinMs: 10_000 })

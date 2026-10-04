@@ -6,7 +6,11 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ### Added
 
-- Two settings in the `/config` menu: `lingerSeconds` (how long a finished list stays in the line) and `joinSeconds` (how long a new task of the same name still joins it). A new task joins a finished list only while the list is shown. A number outside 0 to 120 seconds is set to the nearest. The limits are set in the code and not with `min` and `max` in `plugin.json`, because the plugin test kit refuses to load a plugin whose option breaks one of them (not tried in the host). `0` never shows a finished list, or never joins one. Both default to 20 seconds, as before. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
+- Two settings in the `/config` menu: `lingerSeconds` (how long a finished list stays in the line) and `joinSeconds` (how long a new task of the same name still joins it). A new task joins a finished list only while the list is shown. A number outside 0 to 120 seconds is set to the nearest. The limits are set in the code and not with `min` and `max` in `plugin.json`, because the plugin test kit refuses to load a plugin whose option breaks one of them (not tried in the host). `0` never shows a finished list, or never joins one. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
+
+### Changed
+
+- A finished list stays 15 seconds now, and a new task of the same name joins it for 15 seconds, where both were 20. The 15 are chosen, not measured: a count over nine cases in one day of own sessions found none between 15 and 20 seconds after a list finished (seven were under 3 seconds), which is too little to tell. Set both to 20 to get the old behavior.
 
 ## [0.1.0] - 2026-10-03
 

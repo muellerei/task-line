@@ -16,13 +16,13 @@
       "type": "number",
       "title": "Finished list stays (seconds)",
       "description": "How long a finished list stays in the line, in seconds. 0 never shows a finished list. A value outside the allowed range is set to the nearest allowed one.",
-      "default": 20
+      "default": 15
     },
     "joinSeconds": {
       "type": "number",
       "title": "New task joins (seconds)",
       "description": "How long after a list finished a new task of the same name still joins it, in seconds. It joins only while the list is shown. 0 never joins. A value outside the allowed range is set to the nearest allowed one.",
-      "default": 20
+      "default": 15
     }
   }
 }
