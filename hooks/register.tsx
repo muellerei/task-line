@@ -4,7 +4,7 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 import type { Task, TaskList } from '../types'
 import { LIST_MAX, plain, fit } from './cells'
 import { timingOf } from './config'
-import { BUILTIN, put, statusOf } from './lists'
+import { BUILTIN, closeTasks, issue, put, statusOf, writeTask } from './lists'
 import type { Timing } from './lists'
 import { DEFAULT_COLUMNS, PERCENT_WIDTH, layout, progressOf, rowOf } from './layout'
 import type { Row } from './layout'
@@ -69,11 +69,18 @@ function hideLater($: Engine, name: string, stamp: number, ms: number) {
 }
 
 // Applies the change, and once every task is done hides the list after a short while.
-async function touch($: Engine, name: string, timing: Timing, change: (tasks: Task[]) => Task[]) {
+// A change that answers `null` is let go: the list stays as it is, its timer and its failure are not touched.
+async function touch($: Engine, name: string, timing: Timing, change: (tasks: Task[]) => Task[] | null) {
   const statuses = (list?: TaskList) => list?.tasks.map(t => t.status).join(',') ?? ''
   const now = await $.clock.now()
   const before = statuses((await read($, lists)).find(l => l.name === name))
-  await update($, lists, all => put(all, name, change, timing, now))
+  let isTouched = true
+  await update($, lists, all => {
+    const next = put(all, name, change, timing, now)
+    isTouched = next !== all
+    return next
+  })
+  if (!isTouched) return
   const list = (await read($, lists)).find(l => l.name === name)
   // A task moved on: the failure belonged to the step before.
   if (statuses(list) !== before) await update($, failure, () => null)
@@ -244,6 +251,8 @@ export const register: Register = (on, options) => {
 
   // The to-do list claude-mem keeps for a project: fields {task, status}; a call without `task` is list state, not an item.
   on('tool.call', { tool: WORK_STATE }, async ($, e, next) => {
+    // The number is taken before the tool runs: it says in which order Claude issued the calls, whatever order they answer in.
+    const seq = issue()
     const r = await next(e)
     const { fields, list } = e as unknown as WorkStateInput
     const name = typeof list === 'string' ? plain(list, LIST_MAX) : ''
@@ -252,17 +261,17 @@ export const register: Register = (on, options) => {
     // The state of the list itself: claude-mem closes a list when it is written with the status done and no task. The line lets the
     // list go, so that the next task of that name starts a new one and does not grow a list of everything the name ever held.
     if (fields?.task === undefined && fields?.status === 'done') {
-      await safely($, 'work_state_write', () => touch($, name, timing, () => []))
+      await safely($, 'work_state_write', () => touch($, name, timing, closeTasks(name, seq)))
       return r
     }
     if (!task) return r
     await safely($, 'work_state_write', () =>
-      touch($, name, timing, tasks => {
-        const old = tasks.find(t => t.id === task)
-        const status = statusOf(fields?.status, old?.status ?? 'pending')
-        const item: Task = { id: task, subject: task, status }
-        return old ? tasks.map(t => (t.id === task ? item : t)) : [...tasks, item]
-      }),
+      touch(
+        $,
+        name,
+        timing,
+        writeTask(name, task, old => ({ id: task, subject: task, status: statusOf(fields?.status, old?.status ?? 'pending') }), seq),
+      ),
     )
     return r
   })
