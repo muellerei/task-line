@@ -4,6 +4,10 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
+The two settings were tried by hand in the `/config` menu. The order in which the host starts parallel calls was not checked in the host (see Fixed).
+
 ### Added
 
 - Two settings in the `/config` menu: `lingerSeconds` (how long a finished list stays in the line) and `joinSeconds` (how long a new task of the same name still joins it). A new task joins a finished list only while the list is shown. A number outside 0 to 120 seconds is set to the nearest. The limits are set in the code and not with `min` and `max` in `plugin.json`, because the plugin test kit refuses to load a plugin whose option breaks one of them (not tried in the host). `0` never shows a finished list, or never joins one. If `joinSeconds` is shorter than `lingerSeconds`, a change to a task of the finished list after the join time drops that list.
