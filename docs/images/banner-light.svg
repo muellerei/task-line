@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="task-line: one clean line per task list above the Claude Code prompt">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef3fb"/></linearGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#0d1117" opacity="0.07"/></pattern>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    </style>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="24" fill="url(#dots)"/>
+  <rect x="48" y="44" width="700" height="232" rx="16" fill="#ffffff" stroke="#c3ccd6" stroke-width="2"/>
+  <text x="78" y="92" class="mono" font-size="22" font-weight="700" text-anchor="middle" fill="#db6d28">●</text>
+  <text x="102" y="92" class="mono" font-size="19" fill="#1f2328">Write the tests</text>
+  <rect x="288" y="82" width="150" height="6" rx="3" fill="#e1e6ec"/>
+  <rect x="288" y="82" width="60" height="6" rx="3" fill="#db6d28"/>
+  <text x="458" y="91" class="mono" font-size="17" fill="#1f2328">2/5</text>
+  <text x="504" y="91" class="mono" font-size="17" fill="#59636e">40%</text>
+  <text x="568" y="91" class="mono" font-size="15" fill="#db6d28"></text>
+  <text x="78" y="142" class="mono" font-size="22" font-weight="700" text-anchor="middle" fill="#bf8700">?</text>
+  <text x="102" y="142" class="mono" font-size="19" fill="#1f2328">Ship it</text>
+  <rect x="288" y="132" width="150" height="6" rx="3" fill="#e1e6ec"/>
+  <rect x="288" y="132" width="60" height="6" rx="3" fill="#bf8700"/>
+  <text x="458" y="141" class="mono" font-size="17" fill="#1f2328">2/5</text>
+  <text x="504" y="141" class="mono" font-size="17" fill="#59636e">40%</text>
+  <text x="568" y="141" class="mono" font-size="15" fill="#bf8700">needs you</text>
+  <text x="78" y="192" class="mono" font-size="22" font-weight="700" text-anchor="middle" fill="#cf222e">✕</text>
+  <text x="102" y="192" class="mono" font-size="19" fill="#1f2328">Fix the build</text>
+  <rect x="288" y="182" width="150" height="6" rx="3" fill="#e1e6ec"/>
+  <rect x="288" y="182" width="60" height="6" rx="3" fill="#cf222e"/>
+  <text x="458" y="191" class="mono" font-size="17" fill="#1f2328">2/5</text>
+  <text x="504" y="191" class="mono" font-size="17" fill="#59636e">40%</text>
+  <text x="568" y="191" class="mono" font-size="15" fill="#cf222e">npm test failed</text>
+  <text x="78" y="242" class="mono" font-size="22" font-weight="700" text-anchor="middle" fill="#1a7f37">✓</text>
+  <text x="102" y="242" class="mono" font-size="19" fill="#1f2328">Done</text>
+  <rect x="288" y="232" width="150" height="6" rx="3" fill="#e1e6ec"/>
+  <rect x="288" y="232" width="150" height="6" rx="3" fill="#1a7f37"/>
+  <text x="458" y="241" class="mono" font-size="17" fill="#1f2328">5/5</text>
+  <text x="504" y="241" class="mono" font-size="17" fill="#59636e">100%</text>
+  <text x="568" y="241" class="mono" font-size="15" fill="#1a7f37"></text>
+  <text x="800" y="160" class="mono" font-size="68" font-weight="700" fill="#1f2328" letter-spacing="-2">task<tspan fill="#db6d28">-</tspan>line</text>
+  <text x="804" y="204" class="sans" font-size="26" fill="#31363d">One clean line per task list</text>
+  <text x="804" y="240" class="sans" font-size="19" fill="#59636e">above the Claude Code prompt</text>
+</svg>
