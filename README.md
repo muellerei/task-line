@@ -1,4 +1,15 @@
-# task-line
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
+    <img src="docs/images/banner-light.svg" width="900" alt="task-line: one clean line per task list above the Claude Code prompt">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/muellerei/task-line/releases"><img src="https://img.shields.io/github/v/release/muellerei/task-line?style=flat-square" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/muellerei/task-line?style=flat-square" alt="License: MIT"></a>
+  <a href="https://github.com/muellerei/task-line/commits/main"><img src="https://img.shields.io/github/last-commit/muellerei/task-line?style=flat-square" alt="Last commit"></a>
+</p>
 
 One clean line per task list above the Claude Code prompt, filled from Claude's own todo tools. You do not operate it.
 
