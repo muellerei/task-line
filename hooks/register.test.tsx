@@ -642,3 +642,105 @@ test('the settings reach TaskCreate and TaskUpdate, the built-in todo tools', { 
   await clock.advance(16_000)
   expect(await has(band, '2/2')).toBe(true)
 })
+
+// Calls of one turn reach the tools in the order Claude issues them, but they answer in any order, and the mod hears an answer when it
+// comes. `holdBack` makes one call answer late: its `release` lets it go.
+const callKey = (e: { list?: unknown; fields?: { task?: unknown; status?: unknown } }) => `${e.list}:${e.fields?.task ?? '(close)'}:${e.fields?.status}`
+function holdBack(on: Parameters<typeof answerOk>[0], key: string) {
+  let release = () => {}
+  const gate = new Promise<void>(resolve => (release = resolve))
+  answering(on, async e => {
+    if (callKey(e as never) === key) await gate
+    return { result: {}, text: 'ok' }
+  })
+  return release
+}
+const closeList = ($: TestEngine, list: string) => call($, { tool: WORK_STATE, list, fields: { status: 'done' } })
+
+test('a list closed by a call that answers first stays closed when an earlier call of it answers later', async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  const release = holdBack(on, 'brief:B:done')
+  await item($, 'brief', 'A', 'done')
+  await item($, 'brief', 'B', 'doing')
+
+  // B is finished first and the list closed second; the answer of the close comes first
+  const finishing = item($, 'brief', 'B', 'done')
+  await closeList($, 'brief')
+  release()
+  await finishing
+
+  expect(await has(await mountBand($, 'terminal'), 'brief')).toBe(false)
+  await clock.advance(16_000)
+  expect(await has(await mountBand($, 'terminal'), 'brief')).toBe(false)
+})
+
+test('a task issued after a close stays when the answer of the close comes late, and the tasks before it go', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  const release = holdBack(on, 'brief:(close):done')
+  await item($, 'brief', 'A', 'done')
+  await item($, 'brief', 'B', 'doing')
+
+  // the list is closed first and C added second; the answer of C comes first
+  const closing = closeList($, 'brief')
+  await item($, 'brief', 'C', 'doing')
+  release()
+  await closing
+
+  const band = await mountBand($, 'terminal')
+  expect(await has(band, 'brief: C')).toBe(true)
+  expect(await has(band, '0/1')).toBe(true)
+})
+
+test('two writes to one task count in the order they were issued, not in the order they answer', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  const release = holdBack(on, 'brief:A:doing')
+  await item($, 'brief', 'B', 'todo')
+
+  // A is started first and finished second; the answer of the finish comes first
+  const starting = item($, 'brief', 'A', 'doing')
+  await item($, 'brief', 'A', 'done')
+  release()
+  await starting
+
+  expect(await has(await mountBand($, 'terminal'), '1/2')).toBe(true)
+})
+
+test('a write that is let go does not restart the time a finished list stays', async ($, on) => {
+  const clock = mock.clock(on)
+  engine(on)
+  const release = holdBack(on, 'brief:A:doing')
+
+  // A is started first and finished second; the answer of the finish comes first, and the list is finished
+  const starting = item($, 'brief', 'A', 'doing')
+  await item($, 'brief', 'A', 'done')
+  await clock.advance(10_000)
+  // the start answers late and is let go: the 15 seconds of the list run on from the finish
+  release()
+  await starting
+  await clock.advance(6_000)
+  expect(await has(await mountBand($, 'terminal'), 'brief')).toBe(false)
+})
+
+// A write issued before the close of its list and answering after it is let go, as long as the line still knows the close.
+const lateWriteAfterCloses = async ($: TestEngine, on: Parameters<typeof answerOk>[0], others: number) => {
+  mock.clock(on)
+  engine(on)
+  const release = holdBack(on, 'old:X:done')
+  const late = item($, 'old', 'X', 'done')
+  await closeList($, 'old')
+  for (let i = 0; i < others; i++) await closeList($, `other${i}`)
+  release()
+  await late
+  return has(await mountBand($, 'terminal'), 'old')
+}
+
+test('the line knows the closes of the 20 newest lists', async ($, on) => {
+  expect(await lateWriteAfterCloses($, on, 19)).toBe(false)
+})
+
+test('the close of a list that 20 newer closes have pushed out is forgotten', async ($, on) => {
+  expect(await lateWriteAfterCloses($, on, 20)).toBe(true)
+})

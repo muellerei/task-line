@@ -4,7 +4,7 @@ import type { Task, TaskList } from '../types'
 import { cellsOf, fit, plain, width } from './cells'
 import { settingToMs, timingOf } from './config'
 import { layout, progressOf } from './layout'
-import { put } from './lists'
+import { issue, put } from './lists'
 import type { Timing } from './lists'
 import { register } from './register'
 import { checkOf, checksOf, commandsOf, failureKey, failureLabel, hasPassed, ranAndFailed } from './shell'
@@ -835,4 +835,19 @@ test('the mod hooks four events and none of them is the prompt: what the person 
     {} as never,
   )
   expect([...events].sort()).toEqual(['command.run', 'session.start', 'tool.call', 'ui.render'])
+})
+
+test('put: a change that answers null leaves every list as it was, the list is not touched', () => {
+  const all = [list('a', 1, { doneAt: 5, isHidden: true }), list('b', 1)]
+  expect(put(all, 'a', () => null, TWENTY_SECONDS)).toBe(all)
+  expect(put([], 'a', () => null, TWENTY_SECONDS)).toEqual([])
+})
+
+test('issue: numbers rise within a millisecond and start from the clock, so after a reload a stored `seq` never beats a new call', () => {
+  const start = Date.now()
+  const [a, b, c] = [issue(), issue(), issue()]
+  // The module counter starts again from 0 when the mod is loaded again, the stored `seq` of the tasks does not: the clock is what both share.
+  expect(a).toBeGreaterThanOrEqual(start)
+  expect(b).toBeGreaterThan(a)
+  expect(c).toBeGreaterThan(b)
 })

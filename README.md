@@ -171,7 +171,7 @@ A test fails when a hook on another event is added.
 | Task subject | cut at 200 characters | `SUBJECT_MAX` (`cells.ts`) | `units.test.ts`, the `plain` test |
 | List name | cut at 60 characters | `LIST_MAX` (`cells.ts`) | `boundaries.test.tsx`, the `work_state_write` name test |
 | Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
-| Lists kept | the 20 newest | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
+| Lists kept | the 20 newest, and the 20 latest closes | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests; `register.test.tsx`, the two tests of the closes |
 | Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists |
 | Settings `lingerSeconds` and `joinSeconds` | 0 to 120 seconds, a value outside is set to the nearest | `SETTING_MAX_SECONDS` (`config.ts`) | `units.test.ts`, the `settingToMs` test |
 
@@ -184,6 +184,8 @@ Names and subjects are made safe to draw. Escape sequences and invisible charact
 ### Lists of `work_state_write`
 
 A `work_state_write` list stays as long as its name is in use: when Claude closes it (a write with the status `done` and no task) the line lets it go, and the next task of that name starts a new list. A finished list that has faded (no longer shown after the time `lingerSeconds` sets, or hidden with `×`) is over as well: a task that comes to its name then starts a new list. A task that comes while the finished list is still shown, and not later than `joinSeconds` after it finished, joins it, so that adding one task, finishing it and adding the next keeps the progress. Without both rules a name used again and again would grow into one list of everything it ever held.
+
+Calls of one turn can answer in another order than Claude issued them (a close can answer before a write issued ahead of it). The line counts them in the order they were issued: a write to a task is let go when a call issued later already wrote that task, a write is let go when a call issued later already closed its list, and a close takes away only the tasks written before it, not a task a later call added. The line remembers the 20 latest closes for this, and a reload of the mod makes it forget them. A write that answers only after its list has faded starts a new list, as it did before. It takes the order of the calls from the order in which the host starts them.
 
 ## Develop
 
