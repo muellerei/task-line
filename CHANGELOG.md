@@ -4,6 +4,10 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- The line reads the task list of the desktop app. Its Code tab tells Claude to keep the list with its own `update_plan` tool instead of the todo tools, so the line stayed empty there. The plan's steps fill one list, and the `wrap_up` that ends the turn finishes it.
+
 ## [0.2.0] - 2026-10-11
 
 The two settings were tried by hand in the `/config` menu. The order in which the host starts parallel calls was not checked in the host (see Fixed).

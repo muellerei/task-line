@@ -21,6 +21,9 @@ const STATUS_OF = new Map<string, Status>([
 
 export const statusOf = (raw: unknown, fallback: Status): Status => STATUS_OF.get(String(raw)) ?? fallback
 
+// The task at `index` with `status`; an index outside the list changes nothing.
+export const withStatus = (tasks: Task[], index: number, status: Status): Task[] => tasks.map((t, i) => (i === index ? { ...t, status } : t))
+
 // How long a finished list is shown, and how long after its end a new task of its name still joins it (the settings, in milliseconds).
 export type Timing = { lingerMs: number; joinMs: number }
 

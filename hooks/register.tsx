@@ -4,7 +4,7 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 import type { Task, TaskList } from '../types'
 import { LIST_MAX, plain, fit } from './cells'
 import { timingOf } from './config'
-import { BUILTIN, closeTasks, issue, put, statusOf, writeTask } from './lists'
+import { BUILTIN, closeTasks, issue, put, statusOf, withStatus, writeTask } from './lists'
 import type { Timing } from './lists'
 import { DEFAULT_COLUMNS, PERCENT_WIDTH, layout, progressOf, rowOf } from './layout'
 import type { Row } from './layout'
@@ -20,6 +20,9 @@ const failure = atom({ plugin: 'task-line', key: 'failure' } as const, null as s
 
 // The tool of claude-mem's to-do list, whatever the plugin is called in the person's setup: told by how its name ends.
 const WORK_STATE = /^mcp__.+__work_state_write$/
+// The task list of the desktop app and the wrap-up that ends its turn. The engine's types name only the tools of the terminal.
+const PLAN = /^mcp__ccd_turn__update_plan$/
+const WRAP_UP = /^mcp__ccd_turn__wrap_up$/
 const NBSP = '\u00a0'
 // The theme color of the bar's empty part: a quiet area.
 const TRACK_COLOR = 'userMessageBackground'
@@ -92,6 +95,7 @@ async function touch($: Engine, name: string, timing: Timing, change: (tasks: Ta
 
 // What the mod reads of inputs and results the engine's own types do not name (tools of other plugins, the viewport of a dialog).
 type WorkStateInput = { list?: unknown; fields?: Record<string, unknown> }
+type PlanInput = { items?: unknown; advance?: unknown; done?: unknown; start?: unknown }
 type CreatedResult = { result?: { task?: { id?: unknown } } }
 type UpdatedResult = { result?: { success?: unknown } }
 type BashResult = { result?: { backgroundTaskId?: unknown } }
@@ -272,6 +276,42 @@ export const register: Register = (on, options) => {
         timing,
         writeTask(name, task, old => ({ id: task, subject: task, status: statusOf(fields?.status, old?.status ?? 'pending') }), seq),
       ),
+    )
+    return r
+  })
+
+  // The task list of the desktop app, which asks Claude to keep it in place of the todo tools: the whole plan as `items`, or a step
+  // by `advance` (the active step is done, the next pending one starts) or by `done` and `start` (1-based).
+  on('tool.call', { tool: PLAN }, async ($, e, next) => {
+    const r = await next(e)
+    if (!counts(e, r)) return r
+    const { items, advance, done, start } = e as unknown as PlanInput
+    const at = (n: unknown) => (typeof n === 'number' ? n - 1 : -1)
+    await safely($, 'update_plan', () =>
+      touch($, BUILTIN, timing, tasks => {
+        if (Array.isArray(items)) return items.map((item, i) => ({ id: `plan${i}`, subject: plain(item?.content), status: statusOf(item?.status, 'pending') }))
+        let steps = tasks
+        if (advance === true) {
+          const active = steps.findIndex(t => t.status === 'active')
+          steps = withStatus(steps, active, 'done')
+          const pending = steps.findIndex(t => t.status === 'pending')
+          steps = withStatus(steps, pending, 'active')
+        }
+        // `start` first, so a step named in both ends done.
+        steps = withStatus(steps, at(start), 'active')
+        for (const n of Array.isArray(done) ? done : []) steps = withStatus(steps, at(n), 'done')
+        return steps
+      }),
+    )
+    return r
+  })
+
+  // The wrap-up that ends a turn in the desktop app checks off its task list.
+  on('tool.call', { tool: WRAP_UP }, async ($, e, next) => {
+    const r = await next(e)
+    if (!counts(e, r)) return r
+    await safely($, 'wrap_up', () =>
+      touch($, BUILTIN, timing, tasks => (tasks.every(t => t.status === 'done') ? null : tasks.map(t => ({ ...t, status: 'done' as const })))),
     )
     return r
   })

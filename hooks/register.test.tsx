@@ -440,6 +440,40 @@ test('TaskCreate and TaskUpdate make, move and drop the items of one list', asyn
   expect(await has('✓')).toBe(true)
 })
 
+test('the plan of the desktop app makes a list, moves on by step and ends at the wrap-up', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  answerOk(on)
+  const band = await mountBand($, 'desktop')
+  const plan = (input: object) => call($, { tool: 'mcp__ccd_turn__update_plan', ...input })
+  const step = (content: string, status: string) => ({ content, status })
+
+  await plan({ items: [step('Read the code', 'in_progress'), step('Write tests', 'pending'), step('Ship it', 'pending')], scope: 'first_task' })
+  expect(await has(band, 'Read the code')).toBe(true)
+  expect(await has(band, '0/3')).toBe(true)
+
+  await plan({ advance: true })
+  expect(await has(band, 'Write tests')).toBe(true)
+  expect(await has(band, '1/3')).toBe(true)
+  // The next step is started, not only shown: working, not waiting.
+  expect(await has(band, '●')).toBe(true)
+
+  // A subagent's call does not count.
+  await plan({ advance: true, agentId: 'a1' })
+  expect(await has(band, '1/3')).toBe(true)
+
+  // Out of order, 1-based.
+  await plan({ done: [2], start: 3 })
+  expect(await has(band, 'Ship it')).toBe(true)
+  expect(await has(band, '2/3')).toBe(true)
+  expect(await has(band, '●')).toBe(true)
+
+  // The wrap-up checks off the list.
+  await call($, { tool: 'mcp__ccd_turn__wrap_up', recap: 'All done.' })
+  expect(await has(band, '3/3')).toBe(true)
+  expect(await has(band, '✓')).toBe(true)
+})
+
 test('the button of one list hides that list and leaves the other', async ($, on) => {
   mock.clock(on)
   engine(on)
