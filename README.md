@@ -66,6 +66,7 @@ Or from a shell: `claude plugin marketplace add muellerei/task-line`, then `clau
 |---|---|---|
 | Claude 3.x, Opus 4 to 4.7, Sonnet 4 to 4.6, Haiku 4.5 | yes, by default | nothing |
 | Background and cloud sessions, any model | yes | nothing |
+| Desktop app (Code tab), any model | yes, its own task list | nothing |
 | Newer models (for example Sonnet 5.5) | **no**, left out since Claude Code 2.1.268 | set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (Claude Code 2.1.233 or later), for example with [enable-todo-tools](https://github.com/muellerei/enable-todo-tools), or use a tool named `work_state_write` for the lists |
 
 [enable-todo-tools](https://github.com/muellerei/enable-todo-tools) is a separate companion mod that sets that variable when a session starts, so the todo tools are on without touching your settings. Install it only if you want that: Claude then keeps lists, which costs extra turns. It does not need task-line, and task-line does not need it.
@@ -114,6 +115,7 @@ The line is filled from tool calls Claude already makes, so it needs no extra in
 | `TodoWrite` | one list, replaced on each call |
 | `TaskCreate`, `TaskUpdate` | one list, items added and changed |
 | `work_state_write` (the to-do list tool of [claude-mem](https://github.com/thedotmack/claude-mem), which task-line is not affiliated with, or any MCP tool of that name) | one list per `list`, items from `fields.task` and `fields.status` |
+| `update_plan` (the task list of the desktop app's Code tab) | one list, replaced by `items`, moved on by `advance`, `done` and `start`; the turn's `wrap_up` finishes it |
 
 Calls from subagents, calls that were refused and calls that failed are ignored. Of `work_state_write` the mod sees only the inputs of Claude's calls and whether a call was refused or failed, never what the tool stores or returns.
 
