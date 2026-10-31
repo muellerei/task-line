@@ -1,6 +1,6 @@
 {
   "name": "task-line",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "One clean line per task list above the prompt, filled from Claude's own todo tools, same look in the terminal and the desktop app",
   "author": {
     "name": "Patrick Müller",

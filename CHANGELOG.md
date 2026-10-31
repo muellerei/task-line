@@ -4,6 +4,8 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 The desktop app was checked by hand after `/reload-plugins`: a new plan, a step moved on by `advance` and steps set out of order by `done` and `start` showed in the line. The yellow state while Claude waits for an answer was seen in the desktop app as well, where it was seen in the terminal only before.
 
 ### Added
