@@ -176,7 +176,7 @@ A failing test or build command turns the newest list red (a list that is alread
 - At most two lists are drawn in the band, the newest ones, and at most two background rows come in addition. A third active list is kept, but not shown. Above a question dialog in the terminal only one row is drawn: the newest list, or one background row (the first task, with `+N` for the others) when there is no list. The desktop app keeps the band below its dialog.
 - The background rows show the state at the end of the last answer, not live. A task that ends by itself wakes the session, and the answer that follows brings a new state (measured, headless and interactive, also after Esc). Two cases leave it behind until the next answer: a task you end yourself with `/tasks` stays in the rows, and a task Claude started in an answer you interrupted with Esc is missing (Esc raises no `Stop`).
 - After `/clear` the row is empty until the first answer ends; then a task that kept running shows again (checked by hand with Claude Code 2.1.327).
-- The desktop app already lists background tasks in its own side panel, so the rows repeat it there. It was not checked in the desktop app.
+- The desktop app already lists background tasks in its own side panel, so the rows repeat it there. The rows were checked by hand in the desktop app.
 - A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar keeps its minimum length (see [Limits](#limits)).
 - `/task-line` also works while Claude is busy.
 - A mod that draws in the band above the prompt without calling `next(e)` and this one hide each other's output. More in [Where and how the line draws](docs/behavior.md).
