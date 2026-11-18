@@ -4,6 +4,8 @@ const ELLIPSIS = '…'
 // A name or a subject is cut at this many characters. The engine refuses a tree with more than 100000 characters of text.
 const SUBJECT_MAX = 200
 export const LIST_MAX = 60
+// The kind of a background task is cut at this many characters (the host sends unknown kinds as they are).
+export const TYPE_MAX = 12
 
 // Emoji drawn two cells wide that lie outside the wide blocks below (Unicode Emoji_Presentation, as ranges): ✅ and ⭐ are two cells.
 const WIDE_EMOJI: [number, number][] = [

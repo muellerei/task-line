@@ -43,3 +43,6 @@ export const has = async (band: Band, text: string | RegExp) => (await band.find
 export const exactly = (text: string) => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
 export const filled = async (band: Band) => ((await band.find({ key: 'bar' }))?.text.split('━').length ?? 1) - 1
 export const barCells = async (band: Band) => (await band.find({ key: 'bar' }))?.text.length
+
+// What the host answers a stop with when nothing else does: nothing to say. The kit has no implementation of its own for it.
+export const stopBeneath = (on: TestOn) => on('classic.Stop', () => ({}) as never)
