@@ -4,6 +4,10 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- The marketplace entry no longer repeats the plugin description; `plugin.json` is the one place it is kept. The two copies had drifted apart before, and with 0.5.0 both had to be changed by hand. Claude Code takes the description from `plugin.json` when the entry has none: checked with Claude Code 2.1.327, with a separate config, by adding the marketplace from a local path and reading `claude plugin list --available --json`.
+
 ## [0.5.0] - 2026-11-18
 
 Checked by hand in the terminal and in the desktop app with Claude Code 2.1.327.
