@@ -46,6 +46,14 @@ Cut from real terminal screenshots (dark theme, fullscreen, so the `×` button s
 
 ![A finished list](docs/state-done.png)
 
+**Background tasks.** While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), one more row stands under the lists, or alone when there is no list: a count per kind, in the order the kinds were first named.
+
+```text
+⏵ 2 shell · 1 monitor
+```
+
+It stays until a later answer ends with nothing left running. It has no bar, no percent and no `×`, and it never goes away on a timer: a task that is still running is not finished, and a forgotten one is what the row is for. `/task-line` hides it with the rest of the line.
+
 ## Install
 
 Run these inside Claude Code:
@@ -60,6 +68,7 @@ Or from a shell: `claude plugin marketplace add muellerei/task-line`, then `clau
 ## Requirements
 
 - **Claude Code 2.1.287 or later.** Mods are on by default from that version (an administrator can switch them off). Tested with 2.1.288.
+- **For the background row: a host whose `Stop` input carries `background_tasks`.** Checked with Claude Code 2.1.327; older versions are not promised. Without the field the row never appears and nothing else changes.
 - **A todo list that Claude keeps.** The mod only shows lists Claude already writes and creates none itself, on purpose: a model does not use a substitute tool unless told to. Without a list the line stays empty.
 
 | Your setup | Todo list? | What to do |
@@ -117,6 +126,8 @@ The line is filled from tool calls Claude already makes, so it needs no extra in
 | `work_state_write` (the to-do list tool of [claude-mem](https://github.com/thedotmack/claude-mem), which task-line is not affiliated with, or any MCP tool of that name) | one list per `list`, items from `fields.task` and `fields.status` |
 | `update_plan` (the task list of the desktop app's Code tab) | one list, replaced by `items`, moved on by `advance`, `done` and `start`; the turn's `wrap_up` finishes it |
 
+The row of background tasks has a source of its own: the `Stop` event that Claude Code raises when an answer ends. Its input lists what runs in the background, and the mod counts the entries by their `type` (`shell`, `subagent`, `monitor`, `workflow`; a kind it does not know is shown as sent, cut at 12 characters). Scheduled wake-ups and cron jobs do not count: they wait, they do not run.
+
 Calls from subagents, calls that were refused and calls that failed are ignored. Of `work_state_write` the mod sees only the inputs of Claude's calls and whether a call was refused or failed, never what the tool stores or returns.
 
 Claude Code leaves its task tools out on newer models because they keep track of multi-step work without a written checklist (Claude Code's documentation, [Task tool availability](https://code.claude.com/docs/en/tools-reference#task-tool-availability)). With `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` Claude keeps the list with `TaskCreate` and `TaskUpdate`, and `TodoWrite` only with `CLAUDE_CODE_ENABLE_TASKS=0`. A `work_state_write` tool can come with instructions that make Claude keep its lists there instead of with the built-in tools, and the line reads those lists too.
@@ -152,7 +163,10 @@ A failing test or build command turns the newest list red (a list that is alread
 ## Behavior and limits
 
 - The lists belong to the session: `/clear`, `/resume` and `/branch` start with none, a reload of the mod keeps them.
-- At most two lists are drawn in the band, the newest ones. A third active list is kept, but not shown. Above a question dialog in the terminal only the newest list is shown; the desktop app keeps the band below its dialog.
+- At most two lists are drawn in the band, the newest ones, and the background row comes in addition. A third active list is kept, but not shown. Above a question dialog in the terminal only one row is drawn: the newest list, or the background row when there is no list. The desktop app keeps the band below its dialog.
+- The background row shows the state at the end of the last answer, not live. A task that ends by itself wakes the session, and the answer that follows brings a new state (measured, headless and interactive, also after Esc). Two cases leave it behind until the next answer: a task you end yourself with `/tasks` stays in the row, and a task Claude started in an answer you interrupted with Esc is missing (Esc raises no `Stop`).
+- After `/clear` the row is empty until the first answer ends; then a task that kept running shows again. This follows from `/clear` starting with no state; it was not checked in the host.
+- The desktop app already lists background tasks in its own side panel, so the row repeats it there. It was not checked in the desktop app.
 - A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar keeps its minimum length (see [Limits](#limits)).
 - `/task-line` also works while Claude is busy.
 - A mod that draws in the band above the prompt without calling `next(e)` and this one hide each other's output. More in [Where and how the line draws](docs/behavior.md).
@@ -164,13 +178,14 @@ A failing test or build command turns the newest list red (a list that is alread
 A test fails when a hook on another event is added.
 
 - The mod sees the `Bash` commands Claude runs and the task names of the lists. It keeps the lists and the name of a failed check in the mod's session state, nothing else of a command.
+- It receives the whole input of the host's `Stop` event, which includes Claude's last message and the path of the transcript. It reads only whether `background_tasks` is a list and, of each entry, the `type`. Descriptions, commands, the last message and the rest of the input are not read and not kept. It keeps the count per kind.
 - It reads and writes no files and makes no network calls itself. It does not read Claude's memory, the chat history, summaries or your files.
 - It sees the inputs of tool calls Claude makes, and of a result only what it needs:
   - of a `Bash` result the error flag, whether the text starts with `Exit code` and a number (and is not an interrupt or a timeout), and whether a background task started
   - of a `TaskCreate` result the id of the new task
   - of a `TaskUpdate` result whether it succeeded
   - of every result whether the call was refused or failed
-- It does not watch what you type: it hooks the tool calls Claude makes, the start of a session, the command `/task-line` (whose arguments it does not read) and the drawing of the line, and no event of your prompt or your messages.
+- It does not watch what you type: it hooks the tool calls Claude makes, the end of an answer (`Stop`), the start of a session, the command `/task-line` (whose arguments it does not read) and the drawing of the line, and no event of your prompt or your messages.
 - Of a question to you it knows only that one is open, not your answer.
 
 ## Details
@@ -185,7 +200,8 @@ A test fails when a hook on another event is added.
 | List name | cut at 60 characters | `LIST_MAX` (`cells.ts`) | `boundaries.test.tsx`, the `work_state_write` name test |
 | Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
 | Lists kept | the 20 newest, and the 20 latest closes | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests; `register.test.tsx`, the two tests of the closes |
-| Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists |
+| Kind of a background task | cut at 12 characters | `TYPE_MAX` (`cells.ts`) | `units.test.ts`, the `groupsOf` cut test |
+| Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists; the background row comes on top of the two |
 | Settings `lingerSeconds` and `joinSeconds` | 0 to 120 seconds, a value outside is set to the nearest | `SETTING_MAX_SECONDS` (`config.ts`) | `units.test.ts`, the `settingToMs` test |
 
 Wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.

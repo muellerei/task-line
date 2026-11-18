@@ -8,11 +8,19 @@ The line sits in the band above the prompt. It calls `next(e)` first, so every o
 
 Another mod that draws in that band without calling `next(e)` hides the other mods' output, this one included, and the other way round. The documentation names the tiers of the chain (managed mods, installed mods, then built-in ones), not the order of two installed mods that do not depend on each other. Mods that call `next(e)` (like this one) coexist.
 
+## The row of background tasks
+
+Under the lists, or alone, the band can show one more row: how many background tasks of each kind are running. Its source is the `Stop` event of the host, which carries the list of what runs in the background. The row is drawn from what the last `Stop` said, so it is brought up to date when an answer ends. A task that ends by itself wakes the session, the answer that follows ends with a new `Stop`, and the row follows. This was measured with Claude Code 2.1.327, headless and interactive, also after an answer interrupted with Esc. The mod adds no hooks on `Bash`, `TaskStop` or the agent tool to keep a second count: a count kept by hand could disagree with the host's.
+
+Two cases stay behind until the next answer. A task you end with `/tasks` still stands in the row. A task Claude started in an answer you interrupted with Esc is missing, since Esc raises no `Stop`. The hook for `SubagentStop` is not used either: it carried the same list as the `Stop` before it, and it also fired for the host's own helper agents.
+
+The `Stop` hook passes the event on and answers what the hooks beneath it answer. If writing the row fails, the old row stays.
+
 ## Above the question dialog
 
 In the terminal the line is drawn above the question dialog (`AskUserQuestion`). A question replaces the prompt area there, so the band is not drawn then. The desktop app keeps the band below its dialog, so nothing is added above it.
 
-Only the newest list is shown above the dialog: Claude Code refuses a tree with more than 12 rows around the dialog (its debug log says so), and two lists are over that.
+Only one row is shown above the dialog: Claude Code refuses a tree with more than 12 rows around the dialog (its debug log says so), and two lists are over that. The row is the newest list. Without a list it is the row of background tasks, at most 40 cells wide, because the host counts the tree at 40 columns there. A list and the background row are never drawn together above the dialog.
 
 ## Terminal and desktop app
 
