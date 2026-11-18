@@ -1,6 +1,6 @@
 // The background work of the session: what the host says is running, as far as the line shows it.
 
-import type { Item } from '../types'
+import type { Background, Item } from '../types'
 import { TYPE_MAX, fit, plain, width } from './cells'
 
 // How many tasks the line names. The rest is a count.
@@ -11,7 +11,7 @@ export const SHOWN_MAX = 2
 // the kind (`shell`) is still a label. A kind the host names without text counts as `task`. Entries that are no objects do not count.
 // `undefined` when the field is missing or no array: the caller keeps what it has. An array is final, also an empty one, or one whose
 // entries are all unusable.
-export function itemsOf(tasks: unknown): { shown: Item[]; total: number } | undefined {
+export function itemsOf(tasks: unknown): Background | undefined {
   if (!Array.isArray(tasks)) return undefined
   const shown: Item[] = []
   let total = 0

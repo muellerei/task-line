@@ -9,8 +9,11 @@ export type TaskList = { name: string; tasks: Task[]; doneAt: number | null; isH
 // A background task the line names: what Claude called it (null when it said nothing) and its kind.
 export type Item = { label: string | null; type: string }
 
+// What the line keeps of the background tasks: the first two, and how many run.
+export type Background = { shown: Item[]; total: number }
+
 declare module 'claude-code' {
   interface PluginState {
-    'task-line': { lists: TaskList[]; questions: number; failure: string | null; isOff: boolean; background: { shown: Item[]; total: number } }
+    'task-line': { lists: TaskList[]; questions: number; failure: string | null; isOff: boolean; background: Background }
   }
 }

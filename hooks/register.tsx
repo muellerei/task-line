@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-import type { Item, Task, TaskList } from '../types'
+import type { Background, Item, Task, TaskList } from '../types'
 import { itemsOf, labelIn, rowShapeOf } from './background'
 import { LIST_MAX, plain, fit, width } from './cells'
 import { timingOf } from './config'
@@ -20,7 +20,7 @@ const isOff = atom({ plugin: 'task-line', key: 'isOff' } as const, false)
 const failure = atom({ plugin: 'task-line', key: 'failure' } as const, null as string | null)
 // What the host said at the last stop is running in the background: the first two tasks and how many there are. Replaced at every stop that
 // names a list.
-const background = atom({ plugin: 'task-line', key: 'background' } as const, { shown: [] as Item[], total: 0 })
+const background = atom({ plugin: 'task-line', key: 'background' } as const, { shown: [], total: 0 } as Background)
 
 // The tool of claude-mem's to-do list, whatever the plugin is called in the person's setup: told by how its name ends.
 const WORK_STATE = /^mcp__.+__work_state_write$/
@@ -66,7 +66,7 @@ function backgroundRow({ Box, Text }: Elements, item: Item, index: number, more:
 }
 
 // The rows of the background tasks: one per shown task, `+N` on the last one when more run than are shown.
-const backgroundRows = (elements: Elements, { shown, total }: { shown: Item[]; total: number }, columns: number) =>
+const backgroundRows = (elements: Elements, { shown, total }: Background, columns: number) =>
   shown.map((item, i) => backgroundRow(elements, item, i, i === shown.length - 1 ? total - shown.length : 0, columns))
 
 // Only the main conversation counts, and only a call the tool accepted.
@@ -153,8 +153,8 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
   const shown = (await read($, lists))
     .filter(l => !l.isHidden && l.tasks.length > 0 && (l.doneAt === null || age(l) < timing.lingerMs))
     .slice(isPlain ? -1 : -MAX_LISTS)
-  const tasks = await read($, background)
-  if (shown.length === 0 && tasks.total === 0) return null
+  const running = await read($, background)
+  if (shown.length === 0 && running.total === 0) return null
   // A render may not write state: the hide runs just after, once the wait is over.
   for (const l of shown) if (l.doneAt !== null && Number.isFinite(l.doneAt)) hideLater($, l.name, l.doneAt, timing.lingerMs - age(l))
 
@@ -163,9 +163,9 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
   if (shown.length === 0) {
     const elements = $.ui.resolve(e)
     const { Box, Text } = elements
-    const [first] = tasks.shown
+    const [first] = running.shown
     if (isPlain && first) {
-      const more = tasks.total - 1
+      const more = running.total - 1
       const rest = more > 0 ? ` +${more}` : ''
       // The room of the description: the 40 columns less the glyph, the kind and `+N`. The description gives way.
       const room = DIALOG_COLUMNS - width(DIALOG_GLYPH) - width(` ${first.type}`) - width(rest)
@@ -183,7 +183,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
     }
     return (
       <Box flexDirection="column" paddingX={1}>
-        {backgroundRows(elements, tasks, columns)}
+        {backgroundRows(elements, running, columns)}
       </Box>
     )
   }
@@ -266,7 +266,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
           </Box>
         )
       })}
-      {backgroundRows({ Box, Text }, tasks, columns)}
+      {backgroundRows({ Box, Text }, running, columns)}
     </Box>
   )
 }
@@ -414,9 +414,10 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e, next) => whileAsked($, 'AskUserQuestion', e.agentId, () => next(e)))
   on('tool.call', { tool: 'ExitPlanMode' }, ($, e, next) => whileAsked($, 'ExitPlanMode', e.agentId, () => next(e)))
 
-  // The host's stop carries what runs in the background (measured: Claude Code 2.1.327). Only the kind and the description of each task are read. The stop itself is not
-  // touched: whatever the hooks beneath answer goes up as it is. The count is written before the answer, since the line is drawn
-  // right after the reply and a veto beneath makes the host go on, which ends in the next stop with the new list.
+  // The host's stop carries what runs in the background (measured: Claude Code 2.1.327). Only the kind and the description of each task
+  // are read. The stop itself is not touched: whatever the hooks beneath answer goes up as it is. What is kept (description and kind of
+  // at most two tasks, and how many run) is written before the answer, since the line is drawn right after the reply and a veto beneath
+  // makes the host go on, which ends in the next stop with the new list.
   on('classic.Stop', async ($, e, next) => {
     const items = itemsOf((e as { background_tasks?: unknown }).background_tasks)
     if (items) await safely($, 'Stop', () => update($, background, () => items))
