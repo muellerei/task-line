@@ -4,6 +4,10 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- The background rows name each running task, with what Claude called it and its kind (`↻ Run a 90-second background wait as… shell`), up to two rows with `+N` for the rest, instead of one row with a count per kind (`⏵ 2 shell · 1 subagent`). The triangle looked like a folded section that invites opening, which it was not, and a count did not say what was running. The `Stop` input is now read for the `description` of each entry as well as its `type`; the command is still never read, and only the first two tasks are kept, with their number. A task without a description shows its kind in its place. In a narrow window the description gives way first, then the kind; `+N` is never cut. Above the question dialog it stays one row: the first task with `+N`, at most 40 cells.
+
 ## [0.4.0] - 2026-11-18
 
 Checked by hand in the terminal with Claude Code 2.1.327. The desktop app was not checked.

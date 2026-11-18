@@ -46,11 +46,14 @@ Cut from real terminal screenshots (dark theme, fullscreen, so the `×` button s
 
 ![A finished list](docs/state-done.png)
 
-**Background tasks.** While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), one more row stands under the lists, or alone when there is no list: a count per kind, in the order the kinds were first named.
+**Background tasks.** While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), up to two more rows stand under the lists, or alone when there is no list: one row per task, with what Claude called it and the kind, for the first two tasks the host lists. Those are the ones that have run longest, and so the ones easiest to forget. When more run, the second row ends on `+N` for the tasks not shown.
 
 ```text
-⏵ 2 shell · 1 subagent
+↻ Run a 90-second background wait as… shell
+↻ Count to three slowly subagent +2
 ```
+
+A task that comes without a description shows its kind in the description's place. The command of a task is never shown. In a narrow window the description gives way first, then the kind; `+N` is never cut.
 
 It stays until a later answer ends with nothing left running. It has no bar, no percent and no `×`, and it never goes away on a timer: a task that is still running is not finished, and a forgotten one is what the row is for. `/task-line` hides it with the rest of the line.
 
@@ -125,9 +128,9 @@ The line is filled from tool calls Claude already makes, so it needs no extra in
 | `TaskCreate`, `TaskUpdate` | one list, items added and changed |
 | `work_state_write` (the to-do list tool of [claude-mem](https://github.com/thedotmack/claude-mem), which task-line is not affiliated with, or any MCP tool of that name) | one list per `list`, items from `fields.task` and `fields.status` |
 | `update_plan` (the task list of the desktop app's Code tab) | one list, replaced by `items`, moved on by `advance`, `done` and `start`; the turn's `wrap_up` finishes it |
-| `Stop` (the host's event when an answer ends) | the row of background tasks: the `type` of each entry of `background_tasks`, counted per kind |
+| `Stop` (the host's event when an answer ends) | the rows of background tasks: the `type` and the `description` of each entry of `background_tasks`, the first two shown and the rest counted |
 
-A kind the mod does not know is shown as the host sent it, cut at 12 characters. Scheduled wake-ups and cron jobs do not count: they wait, they do not run. A task of the `Monitor` tool comes with the kind `shell` (measured with 2.1.327; the footer of Claude Code calls it a monitor), so the row says `1 shell` for it. Whether a monitor of an MCP server, such as the live updates of a published page, comes as `monitor` was not checked.
+A kind the mod does not know is shown as the host sent it, cut at 12 characters. A description is cut at 200 characters like a task name. Scheduled wake-ups and cron jobs do not count: they wait, they do not run. A task of the `Monitor` tool comes with the kind `shell` (measured with 2.1.327; the footer of Claude Code calls it a monitor), so the row says `shell` for it. Whether a monitor of an MCP server, such as the live updates of a published page, comes as `monitor` was not checked.
 
 Calls from subagents, calls that were refused and calls that failed are ignored. Of `work_state_write` the mod sees only the inputs of Claude's calls and whether a call was refused or failed, never what the tool stores or returns.
 
@@ -164,10 +167,10 @@ A failing test or build command turns the newest list red (a list that is alread
 ## Behavior and limits
 
 - The lists belong to the session: `/clear`, `/resume` and `/branch` start with none, a reload of the mod keeps them.
-- At most two lists are drawn in the band, the newest ones, and the background row comes in addition. A third active list is kept, but not shown. Above a question dialog in the terminal only one row is drawn: the newest list, or the background row when there is no list. The desktop app keeps the band below its dialog.
-- The background row shows the state at the end of the last answer, not live. A task that ends by itself wakes the session, and the answer that follows brings a new state (measured, headless and interactive, also after Esc). Two cases leave it behind until the next answer: a task you end yourself with `/tasks` stays in the row, and a task Claude started in an answer you interrupted with Esc is missing (Esc raises no `Stop`).
+- At most two lists are drawn in the band, the newest ones, and at most two background rows come in addition. A third active list is kept, but not shown. Above a question dialog in the terminal only one row is drawn: the newest list, or one background row (the first task, with `+N` for the others) when there is no list. The desktop app keeps the band below its dialog.
+- The background rows show the state at the end of the last answer, not live. A task that ends by itself wakes the session, and the answer that follows brings a new state (measured, headless and interactive, also after Esc). Two cases leave it behind until the next answer: a task you end yourself with `/tasks` stays in the rows, and a task Claude started in an answer you interrupted with Esc is missing (Esc raises no `Stop`).
 - After `/clear` the row is empty until the first answer ends; then a task that kept running shows again (checked by hand with Claude Code 2.1.327).
-- The desktop app already lists background tasks in its own side panel, so the row repeats it there. It was not checked in the desktop app.
+- The desktop app already lists background tasks in its own side panel, so the rows repeat it there. It was not checked in the desktop app.
 - A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar keeps its minimum length (see [Limits](#limits)).
 - `/task-line` also works while Claude is busy.
 - A mod that draws in the band above the prompt without calling `next(e)` and this one hide each other's output. More in [Where and how the line draws](docs/behavior.md).
@@ -179,7 +182,7 @@ A failing test or build command turns the newest list red (a list that is alread
 A test fails when a hook on another event is added.
 
 - The mod sees the `Bash` commands Claude runs and the task names of the lists. It keeps the lists and the name of a failed check in the mod's session state, nothing else of a command.
-- It receives the whole input of the host's `Stop` event, which includes Claude's last message and the path of the transcript. It reads only whether `background_tasks` is a list and, of each entry, the `type`. Descriptions, commands, the last message and the rest of the input are not read and not kept. It keeps the count per kind.
+- It receives the whole input of the host's `Stop` event, which includes Claude's last message and the path of the transcript. It reads only whether `background_tasks` is a list and, of each entry, the `type` and the `description`. Commands, the last message and the rest of the input are not read and not kept. It keeps the description and the kind of at most two tasks, and how many run.
 - It reads and writes no files and makes no network calls itself. It does not read Claude's memory, the chat history, summaries or your files.
 - It sees the inputs of tool calls Claude makes, and of a result only what it needs:
   - of a `Bash` result the error flag, whether the text starts with `Exit code` and a number (and is not an interrupt or a timeout), and whether a background task started
@@ -197,13 +200,15 @@ A test fails when a hook on another event is added.
 | --- | --- | --- | --- |
 | Bar width | about 40% of the width, at least 10 and at most 60 characters, and it gives way when the row would not fit | `BAR_SHARE`, `BAR_MIN`, `BAR_MAX` (`layout.ts`) | `units.test.ts`, the `layout` tests |
 | Label slot | as long as the longest label, at least 8 and at most 35% of the width, down to 4 when the row is narrow | `LABEL_MIN`, `LABEL_SHARE`, `LABEL_FLOOR` (`layout.ts`) | `units.test.ts`, the `layout` tests |
-| Task subject | cut at 200 characters | `SUBJECT_MAX` (`cells.ts`) | `units.test.ts`, the `plain` test |
+| Task subject, and the description of a background task | cut at 200 characters | `SUBJECT_MAX` (`cells.ts`) | `units.test.ts`, the `plain` test and the `itemsOf` cut test |
 | List name | cut at 60 characters | `LIST_MAX` (`cells.ts`) | `boundaries.test.tsx`, the `work_state_write` name test |
 | Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
 | Lists kept | the 20 newest, and the 20 latest closes | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests; `register.test.tsx`, the two tests of the closes |
-| Kind of a background task | cut at 12 characters | `TYPE_MAX` (`cells.ts`) | `units.test.ts`, the `groupsOf` cut test |
-| Width of the row of background tasks above a question dialog | 40 cells with the glyph, because the host counts the tree there at 40 columns | `DIALOG_COLUMNS` (`register.tsx`) | `dialog.test.tsx`, the test for the 40 columns |
-| Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists; the background row comes on top of the two |
+| Kind of a background task | cut at 12 characters | `TYPE_MAX` (`cells.ts`) | `units.test.ts`, the `itemsOf` cut test |
+| Background tasks shown | 2, the rest as `+N` | `SHOWN_MAX` (`background.ts`) | `units.test.ts`, the `itemsOf` tests; `register.test.tsx`, the test for three tasks |
+| Description of a background task in a narrow band | dropped whole under 4 cells, never shown as an ellipsis alone; the kind is cut only when it does not fit even alone, to one cell at least; `+N` is never cut | `LABEL_MIN` (`background.ts`) | `boundaries.test.tsx`, the tests for the room of the description; `units.test.ts`, the `labelIn` and `rowShapeOf` tests |
+| Width of the row of background tasks above a question dialog | 40 cells with the glyph, because the host counts the tree there at 40 columns | `DIALOG_COLUMNS` (`register.tsx`) | `dialog.test.tsx`, the tests for the 40 columns |
+| Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists; the background rows come on top of the two |
 | Settings `lingerSeconds` and `joinSeconds` | 0 to 120 seconds, a value outside is set to the nearest | `SETTING_MAX_SECONDS` (`config.ts`) | `units.test.ts`, the `settingToMs` test |
 
 Wide characters such as CJK or emoji count as two cells. Neither the bar nor the percent shows a finished list before the list is finished (199 of 200 is 99%), and both show something as soon as one task is done.
@@ -222,7 +227,7 @@ Calls of one turn can answer in another order than Claude issued them (a close c
 
 The commands to build and check a change, and the reason for each, are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-check).
 
-The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button, `/task-line` and the row of background tasks. `dialog.test.tsx` mounts the question dialog and checks that only one row stands above it, at most 40 cells wide. How the dialog looks is checked in a session.
+The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the room of a background row, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button, `/task-line` and the rows of background tasks. `dialog.test.tsx` mounts the question dialog and checks that only one row stands above it, at most 40 cells wide. How the dialog looks is checked in a session.
 
 ## License
 
