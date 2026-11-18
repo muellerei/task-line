@@ -4,6 +4,10 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
+Checked by hand in the terminal with Claude Code 2.1.327. The desktop app was not checked.
+
 ### Added
 
 - A row for running background tasks, such as `⏵ 2 shell · 1 subagent`, under the lists or alone. A forgotten monitor, agent or background command is easy to miss, and it kept running across `/clear` unseen. The row counts what the `background_tasks` of the host's `Stop` input lists, by kind, and stays until a later `Stop` reports nothing running. Only the kind of each entry is read, never what a task is called or runs. Above the question dialog it takes the place of the list row when there is no list, never joins it, and is cut to 40 cells. `/task-line` hides it too.

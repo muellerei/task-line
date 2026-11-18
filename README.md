@@ -222,7 +222,7 @@ Calls of one turn can answer in another order than Claude issued them (a close c
 
 The commands to build and check a change, and the reason for each, are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-check).
 
-The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button and `/task-line`. The question dialog itself cannot be mounted in the test kit, so its look is only checked in a session.
+The tests mount the band on the terminal and the desktop surface. `units.test.ts` tests the pure functions with their limits, `boundaries.test.tsx` the line at its limits (the ends of the bar and the percent, the time a finished list stays to the millisecond, odd statuses and names, concurrent questions, failed checks), `register.test.tsx` the rest: the list sources, the question state, the table of recognized commands, the `×` button, `/task-line` and the row of background tasks. `dialog.test.tsx` mounts the question dialog and checks that only one row stands above it, at most 40 cells wide. How the dialog looks is checked in a session.
 
 ## License
 
