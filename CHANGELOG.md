@@ -4,10 +4,15 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-18
+
+Checked by hand in the terminal and in the desktop app with Claude Code 2.1.327.
+
 ### Changed
 
 - The background rows name each running task, with what Claude called it and its kind (`↻ Run a 90-second background wait as… shell`), up to two rows with `+N` for the rest, instead of one row with a count per kind (`⏵ 2 shell · 1 subagent`). The triangle looked like a folded section that invites opening, which it was not, and a count did not say what was running. The `Stop` input is now read for the `description` of each entry as well as its `type`; the command is still never read, and only the first two tasks are kept, with their number. A task without a description shows its kind in its place. In a narrow window the description gives way first, then the kind; `+N` is never cut. Above the question dialog it stays one row: the first task with `+N`, at most 40 cells.
 - Checked by hand in the terminal with Claude Code 2.1.327: three background tasks show as two rows, the second ending on `+1`; two show as two rows without `+N`; at 30 columns the descriptions are cut while the kind and `+N` stay whole; above the question dialog one row with `+2` stands for three tasks; the rows go once the tasks have ended and the answer they wake is done. Checked by hand in the desktop app as well: the rows show, do not wrap and do not look like something to open. Not checked: the drop of the description under 4 cells (covered by tests only).
+- The plugin descriptions and the README name the background rows, and why they help: Claude Code shows background work in the terminal only as a count in its footer and in `/tasks`.
 
 ## [0.4.0] - 2026-11-18
 
