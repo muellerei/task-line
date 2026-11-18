@@ -1,7 +1,24 @@
 import { test, expect, mock } from 'claude-code/testing'
 
-import { answering, barCells, call, engine, exactly, failedRun, filled, has, mountBand, runCommand, todo, todos, WORK_STATE, stopBeneath } from './test-support'
+import {
+  answering,
+  barCells,
+  bgRows,
+  call,
+  engine,
+  exactly,
+  failedRun,
+  filled,
+  has,
+  mountBand,
+  runCommand,
+  todo,
+  todos,
+  WORK_STATE,
+  stopBeneath,
+} from './test-support'
 import type { TestEngine, TestOn } from './test-support'
+import { fit, width } from './cells'
 
 // Both times 20 seconds: the tests that count to the millisecond hang on this number, not on the default.
 const TWENTY_SECONDS = { options: { lingerSeconds: 20, joinSeconds: 20 } }
@@ -672,34 +689,105 @@ test('a TaskUpdate that the tool answered with success false changes nothing', a
   expect(await has(band, '1/2')).toBe(true)
 })
 
-for (const surface of ['terminal', 'desktop'] as const) {
-  test(`${surface}: at 20 columns many kinds stay one row: the glyph is a text of its own and the kinds are cut, not wrapped`, async ($, on) => {
-    mock.clock(on)
-    engine(on)
-    stopBeneath(on)
-    const band = await mountBand($, surface, { bodyColumns: 20 })
-    await $.classic.Stop({
-      stop_hook_active: false,
-      background_tasks: ['shell', 'monitor', 'subagent', 'workflow', 'verylongtypename'].map(type => ({ type })),
-    } as never)
-    const glyphs = await band.findAll({ type: 'Text', text: '⏵' })
-    expect(glyphs).toHaveLength(1)
-    const kinds = await band.find({ type: 'Text', text: /shell/ })
-    expect(kinds?.props.wrap).toBe('truncate')
-    expect(kinds?.text).toBe('1 shell · 1 monitor · 1 subagent · 1 workflow · 1 verylongtyp…')
-    // one row: the glyph and the kinds share one Box, and nothing else of the line is in it
-    const rows = await band.findAll({ type: 'Box', text: /shell/ })
-    expect(rows.at(-1)?.children).toHaveLength(2)
-  })
-}
-
-test('without a list the widths of the lists are never asked for: the line of kinds alone draws at any width', async ($, on) => {
+// The engine's own drawing beneath, the clock, and a host that has nothing to say at a stop.
+const bgSetup = (on: TestOn) => {
   mock.clock(on)
   engine(on)
   stopBeneath(on)
-  for (const columns of [1, 5, 20, 400]) {
-    const band = await mountBand($, 'terminal', { bodyColumns: columns })
-    await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ type: 'shell' }] } as never)
-    expect(await band.find({ text: '1 shell' })).toBeDefined()
-  }
+}
+// One Stop with the given tasks, the band at `columns`: the rows of background tasks as the band draws them.
+async function backgroundAt($: TestEngine, columns: number, tasks: object[], surface: 'terminal' | 'desktop' = 'terminal') {
+  const band = await mountBand($, surface, { bodyColumns: columns })
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: tasks } as never)
+  return { band, rows: await bgRows(band) }
+}
+const many = (n: number, type: string, description?: string) => Array.from({ length: n }, () => ({ type, description }))
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`${surface}: a background row is one Box: glyph, description cut not wrapped, kind and +N that never shrink`, async ($, on) => {
+    bgSetup(on)
+    const { rows } = await backgroundAt($, 120, [...many(2, 'shell', 'Run the build'), ...many(3, 'shell', 'x')], surface)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.children).toHaveLength(3)
+    expect(rows[1]!.children).toHaveLength(4)
+    expect(rows[0]!.children[1]!.props.wrap).toBe('truncate')
+    expect(rows[0]!.children.slice(2).map(c => c.props.flexShrink)).toEqual([0])
+    expect(rows[1]!.children.slice(2).map(c => c.props.flexShrink)).toEqual([0, 0])
+    expect(rows[1]!.text).toBe('↻Run the buildshell+3')
+  })
+
+  test(`${surface}: at 20 columns a kind of 12 cells and +3 leave no room: the description goes, glyph, kind and +3 stay`, async ($, on) => {
+    bgSetup(on)
+    const { rows, band } = await backgroundAt($, 20, many(5, 'verylongtypename', 'A fairly long description'), surface)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.text).toBe('↻verylongtyp…')
+    expect(rows[1]!.text).toBe('↻verylongtyp…+3')
+    expect(rows[1]!.children).toHaveLength(3)
+    expect(await has(band, 'fairly')).toBe(false)
+  })
+}
+
+test('at 40 columns a description of 60 characters is cut to the room the kind leaves, and the row fills at most 38 cells', async ($, on) => {
+  bgSetup(on)
+  const label = 'abcdefghij'.repeat(6)
+  const { band, rows } = await backgroundAt($, 40, [{ type: 'shell', description: label }])
+  // 38 cells of room, less glyph, gap, kind (5), gap before the kind: 30 for the description
+  const shown = (await band.findAll({ type: 'Text' })).map(t => t.text).find(t => t.startsWith('abc'))!
+  expect(shown).toBe(fit(label, 30))
+  expect(width('↻') + 1 + width(shown) + 1 + width('shell')).toBeLessThanOrEqual(38)
+  expect(rows[0]!.text).toBe(`↻${fit(label, 30)}shell`)
+})
+
+test('the room of the description counts +N: with it the description is shorter by its width and the gap', async ($, on) => {
+  bgSetup(on)
+  const label = 'abcdefghij'.repeat(6)
+  const { rows } = await backgroundAt($, 40, [...many(2, 'shell', label), ...many(10, 'shell', 'x')])
+  // +10 is 3 cells and a gap: 26 for the description on the second row, 30 on the first
+  expect(rows[0]!.text).toBe(`↻${fit(label, 30)}shell`)
+  expect(rows[1]!.text).toBe(`↻${fit(label, 26)}shell+10`)
+})
+
+test('a description that fits is not cut and not padded, one cell more is cut', async ($, on) => {
+  bgSetup(on)
+  // 14 columns: 12 of room, less 7 for glyph, gaps and kind: 4 cells for the description
+  expect((await backgroundAt($, 14, [{ type: 'shell', description: 'abcd' }])).rows[0]!.text).toBe('↻abcdshell')
+  expect((await backgroundAt($, 14, [{ type: 'shell', description: 'abcde' }])).rows[0]!.text).toBe('↻abc…shell')
+})
+
+test('under 4 cells the description is dropped whole, not shown as an ellipsis alone', async ($, on) => {
+  bgSetup(on)
+  // 13 columns: 3 cells for the description
+  expect((await backgroundAt($, 13, [{ type: 'shell', description: 'abcdefgh' }])).rows[0]!.text).toBe('↻shell')
+})
+
+test('a kind that does not fit is cut to what is left, one cell at least, and +N is never cut', async ($, on) => {
+  bgSetup(on)
+  const tasks = many(5, 'verylongtypename', 'desc')
+  // 8 columns: 6 of room, glyph and gap 2, +3 with its gap 3: one cell for the kind
+  const narrow = (await backgroundAt($, 8, tasks)).rows
+  expect(narrow[1]!.text).toBe('↻…+3')
+  // 9 columns: two cells for the kind
+  expect((await backgroundAt($, 9, tasks)).rows[1]!.text).toBe('↻v…+3')
+  // far too narrow: the host cuts, the row keeps one cell of kind and the whole +3
+  expect((await backgroundAt($, 1, tasks)).rows[1]!.text).toBe('↻…+3')
+})
+
+test('a task without a description keeps its kind in the normal color and cuts it the same way', async ($, on) => {
+  bgSetup(on)
+  const { rows, band } = await backgroundAt($, 20, [{ type: 'verylongtypename' }])
+  expect(rows[0]!.text).toBe('↻verylongtyp…')
+  expect(rows[0]!.children).toHaveLength(2)
+  expect((await band.find({ type: 'Text', text: 'verylongtyp…' }))?.props.dimColor).toBeFalsy()
+  expect((await backgroundAt($, 5, [{ type: 'verylongtypename' }])).rows[0]!.text).toBe('↻…')
+})
+
+test('without a list the widths of the lists are never asked for: the rows of background tasks alone draw at any width', async ($, on) => {
+  bgSetup(on)
+  const rowAt = async (columns: number) => (await backgroundAt($, columns, [{ type: 'shell', description: 'Run it' }])).rows[0]!.text
+  expect(await rowAt(400)).toBe('↻Run itshell')
+  // 20 columns: 18 of room, 10 cells for the description
+  expect(await rowAt(20)).toBe('↻Run itshell')
+  // 5 columns: the description goes, the kind is cut to the one cell that is left
+  expect(await rowAt(5)).toBe('↻…')
+  expect(await rowAt(1)).toBe('↻…')
 })

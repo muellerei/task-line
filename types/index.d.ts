@@ -6,11 +6,14 @@ export type Task = { id: string; subject: string; status: Status; seq?: number }
 // One list per todo source: the built-in todo tools share one list, work_state_write has one per `list`.
 export type TaskList = { name: string; tasks: Task[]; doneAt: number | null; isHidden: boolean }
 
-// How many background tasks of one kind the host reported at the last stop.
-export type Group = { type: string; count: number }
+// A background task the line names: what Claude called it (null when it said nothing) and its kind.
+export type Item = { label: string | null; type: string }
+
+// What the line keeps of the background tasks: the first two, and how many run.
+export type Background = { shown: Item[]; total: number }
 
 declare module 'claude-code' {
   interface PluginState {
-    'task-line': { lists: TaskList[]; questions: number; failure: string | null; isOff: boolean; background: Group[] }
+    'task-line': { lists: TaskList[]; questions: number; failure: string | null; isOff: boolean; background: Background }
   }
 }

@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 
 import type { Task, TaskList } from '../types'
-import { groupsOf, textOf } from './background'
+import { LABEL_MIN, itemsOf, labelIn, rowShapeOf } from './background'
 import { TYPE_MAX, cellsOf, fit, plain, width } from './cells'
 import { settingToMs, timingOf } from './config'
 import { layout, progressOf } from './layout'
@@ -853,47 +853,88 @@ test('issue: numbers rise within a millisecond and start from the clock, so afte
   expect(c).toBeGreaterThan(b)
 })
 
-test('groupsOf: kinds are counted in the order they are first named, and the text says so', () => {
-  const groups = groupsOf([{ type: 'shell' }, { type: 'monitor' }, { type: 'shell' }])
-  expect(groups).toEqual([
-    { type: 'shell', count: 2 },
-    { type: 'monitor', count: 1 },
-  ])
-  expect(textOf(groups!)).toBe('2 shell · 1 monitor')
+test('itemsOf: the first two entries are kept as label and kind, and the total counts all', () => {
+  const tasks = [
+    { type: 'shell', description: 'First' },
+    { type: 'subagent', description: 'Second' },
+    { type: 'shell', description: 'Third' },
+  ]
+  expect(itemsOf(tasks)).toEqual({
+    shown: [
+      { label: 'First', type: 'shell' },
+      { label: 'Second', type: 'subagent' },
+    ],
+    total: 3,
+  })
 })
 
-test('groupsOf: an empty list is a list, a missing field or a non-list is no answer', () => {
-  expect(groupsOf([])).toEqual([])
-  for (const odd of [undefined, null, 'x', 5, {}, { length: 1 }]) expect(groupsOf(odd), JSON.stringify(odd)).toBeUndefined()
+test('itemsOf: an empty list is a list, a missing field or a non-list is no answer', () => {
+  expect(itemsOf([])).toEqual({ shown: [], total: 0 })
+  for (const odd of [undefined, null, 'x', 5, {}, { length: 1 }]) expect(itemsOf(odd), JSON.stringify(odd)).toBeUndefined()
 })
 
-test('groupsOf: an entry without a kind is a task, an entry that is no object is not counted', () => {
-  expect(groupsOf([{}, { type: '' }, { type: '  ' }, { type: undefined }, { type: 'shell' }])).toEqual([
-    { type: 'task', count: 4 },
-    { type: 'shell', count: 1 },
-  ])
-  expect(groupsOf([null, 5, 'shell', undefined])).toEqual([])
+test('itemsOf: a missing, empty or blank description is no label, and the command is never read', () => {
+  const none = [{ type: 'shell' }, { type: 'shell', description: '' }, { type: 'shell', description: '   ' }, { type: 'shell', description: undefined }]
+  expect(itemsOf(none)?.shown.map(i => i.label)).toEqual([null, null])
+  expect(itemsOf(none)?.total).toBe(4)
+  const only = itemsOf([{ type: 'shell', command: 'curl -H "Authorization: secret" host' }])
+  expect(only).toEqual({ shown: [{ label: null, type: 'shell' }], total: 1 })
+  expect(JSON.stringify(only)).not.toContain('secret')
 })
 
-test('groupsOf: kinds named like members of Object are kinds of their own', () => {
-  const groups = groupsOf([{ type: 'constructor' }, { type: '__proto__' }, { type: 'constructor' }, { type: 'toString' }])
-  expect(groups).toEqual([
-    { type: 'constructor', count: 2 },
-    { type: '__proto__', count: 1 },
-    { type: 'toString', count: 1 },
-  ])
+test('itemsOf: a description that reads like the kind is still a label', () => {
+  expect(itemsOf([{ type: 'shell', description: 'shell' }])?.shown).toEqual([{ label: 'shell', type: 'shell' }])
 })
 
-test('groupsOf: a kind is made safe and cut at TYPE_MAX characters, and the cut text is what groups', () => {
+test('itemsOf: a description is made safe and cut at 200 characters, a kind at TYPE_MAX', () => {
   expect(TYPE_MAX).toBe(12)
-  expect(groupsOf([{ type: 'verylongtypename' }])).toEqual([{ type: 'verylongtyp…', count: 1 }])
-  // two kinds that read the same once cut are one group
-  expect(groupsOf([{ type: 'verylongtypename-a' }, { type: 'verylongtypename-b' }])).toEqual([{ type: 'verylongtyp…', count: 2 }])
-  // control characters and escape sequences do not reach the line
-  expect(groupsOf([{ type: 'sh\u001b[31mel\nl' }, { type: 'sh\u202eell' }])).toEqual([
-    { type: 'shel l', count: 1 },
-    { type: 'shell', count: 1 },
-  ])
-  // exactly 12 characters stay whole
-  expect(groupsOf([{ type: 'abcdefghijkl' }])).toEqual([{ type: 'abcdefghijkl', count: 1 }])
+  const long = itemsOf([{ type: 'verylongtypename', description: 'x'.repeat(300) }])!.shown[0]!
+  expect(long.type).toBe('verylongtyp…')
+  expect([...long.label!]).toHaveLength(200)
+  expect(long.label!.endsWith('…')).toBe(true)
+  const dirty = itemsOf([{ type: 'sh\u001b[31mel\nl', description: 'a\u001b[31mb\nc‮d' }])!.shown[0]!
+  expect(dirty).toEqual({ label: 'ab cd', type: 'shel l' })
+  expect(itemsOf([{ type: 'abcdefghijkl', description: 'd' }])!.shown[0]!.type).toBe('abcdefghijkl')
+})
+
+test('itemsOf: an entry without a kind is a task, an entry that is no object does not count', () => {
+  expect(itemsOf([{}, { type: '' }, { type: '  ' }, { type: undefined }, { type: 'shell' }])).toEqual({
+    shown: [
+      { label: null, type: 'task' },
+      { label: null, type: 'task' },
+    ],
+    total: 5,
+  })
+  expect(itemsOf([null, 5, 'shell', undefined])).toEqual({ shown: [], total: 0 })
+  expect(itemsOf([null, { type: 'shell', description: 'A' }])).toEqual({ shown: [{ label: 'A', type: 'shell' }], total: 1 })
+})
+
+test('itemsOf: kinds named like members of Object are kinds like any other', () => {
+  const tasks = [{ type: 'constructor' }, { type: '__proto__' }, { type: 'toString' }]
+  expect(itemsOf(tasks)).toEqual({
+    shown: [
+      { label: null, type: 'constructor' },
+      { label: null, type: '__proto__' },
+    ],
+    total: 3,
+  })
+})
+
+test('labelIn: whole when it fits, cut with an ellipsis and not padded when not, nothing under LABEL_MIN cells', () => {
+  expect(LABEL_MIN).toBe(4)
+  expect(labelIn('abcd', 4)).toBe('abcd')
+  expect(labelIn('abcde', 4)).toBe('abc…')
+  expect(labelIn('abcdefgh', 3)).toBeNull()
+  expect(labelIn('abcdefgh', -5)).toBeNull()
+  // a wide character that does not fit leaves no padding behind
+  expect(labelIn('ab漢字漢字', 5)).toBe('ab漢…')
+})
+
+test('rowShapeOf: the description gives way first, then the kind to one cell, +N never', () => {
+  const item = { label: 'a long description', type: 'shell' }
+  expect(rowShapeOf(item, 0, 100)).toEqual({ label: 'a long description', type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 20)).toEqual({ label: 'a long de…', type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 11)).toEqual({ label: null, type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 5)).toEqual({ label: null, type: '…', kindInPlace: false })
+  expect(rowShapeOf({ label: null, type: 'shell' }, 0, 100)).toEqual({ label: null, type: 'shell', kindInPlace: true })
 })
