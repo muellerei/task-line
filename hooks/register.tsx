@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
 import type { Item, Task, TaskList } from '../types'
-import { itemsOf } from './background'
+import { itemsOf, labelIn, rowShapeOf } from './background'
 import { LIST_MAX, plain, fit, width } from './cells'
 import { timingOf } from './config'
 import { BUILTIN, closeTasks, issue, put, statusOf, withStatus, writeTask } from './lists'
@@ -39,17 +39,21 @@ const DIALOG_GLYPH = ` ${BACKGROUND_GLYPH} `
 
 type Elements = Pick<ReturnType<Engine['ui']['resolve']>, 'Box' | 'Text'>
 
-// The row of one background task in the band: the glyph, what Claude called the task, the kind, and for the second row `+N` when more
-// run. Each in a text of its own; the description is cut, the kind and `+N` keep their width. Without a description the kind stands in
+// The row of one background task in the band: the glyph, what Claude called the task, the kind, and for the last row `+N` when more run.
+// Each in a text of its own. The description gives way to the room (`rowShapeOf`, since `truncate` knows no lower limit and the test kit
+// measures no width), and `truncate` stays as a safeguard; the kind and `+N` keep their width. Without a description the kind stands in
 // its place, in the normal color.
-function backgroundRow({ Box, Text }: Elements, item: Item, index: number, more: number) {
+function backgroundRow({ Box, Text }: Elements, item: Item, index: number, more: number, columns: number) {
+  const row = rowShapeOf(item, more, columns)
   return (
     <Box key={`background:${index}`} flexDirection="row" gap={1}>
       <Text color="inactive">{BACKGROUND_GLYPH}</Text>
-      <Text wrap="truncate">{item.label ?? item.type}</Text>
-      {item.label !== null && (
+      {row.label !== null && <Text wrap="truncate">{row.label}</Text>}
+      {row.kindInPlace ? (
+        <Text wrap="truncate">{row.type}</Text>
+      ) : (
         <Box flexShrink={0}>
-          <Text dimColor>{item.type}</Text>
+          <Text dimColor>{row.type}</Text>
         </Box>
       )}
       {more > 0 && (
@@ -62,8 +66,8 @@ function backgroundRow({ Box, Text }: Elements, item: Item, index: number, more:
 }
 
 // The rows of the background tasks: one per shown task, `+N` on the last one when more run than are shown.
-const backgroundRows = (elements: Elements, { shown, total }: { shown: Item[]; total: number }) =>
-  shown.map((item, i) => backgroundRow(elements, item, i, i === shown.length - 1 ? total - shown.length : 0))
+const backgroundRows = (elements: Elements, { shown, total }: { shown: Item[]; total: number }, columns: number) =>
+  shown.map((item, i) => backgroundRow(elements, item, i, i === shown.length - 1 ? total - shown.length : 0, columns))
 
 // Only the main conversation counts, and only a call the tool accepted.
 const counts = (e: { agentId?: string }, r: { deny?: unknown; isError?: boolean }) => e.agentId === undefined && r.deny === undefined && !r.isError
@@ -165,19 +169,21 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
       const rest = more > 0 ? ` +${more}` : ''
       // The room of the description: the 40 columns less the glyph, the kind and `+N`. The description gives way.
       const room = DIALOG_COLUMNS - width(DIALOG_GLYPH) - width(` ${first.type}`) - width(rest)
-      const label = first.label === null ? null : width(first.label) > room ? fit(first.label, room) : first.label
+      const label = first.label === null ? null : labelIn(first.label, room)
       return (
         <Box flexDirection="row">
           <Text color="inactive">{DIALOG_GLYPH}</Text>
-          {label === null ? <Text>{first.type}</Text> : <Text>{label}</Text>}
+          {first.label === null && <Text>{first.type}</Text>}
+          {label !== null && <Text>{label}</Text>}
           {label !== null && <Text dimColor>{` ${first.type}`}</Text>}
+          {first.label !== null && label === null && <Text dimColor>{first.type}</Text>}
           {rest && <Text dimColor>{rest}</Text>}
         </Box>
       )
     }
     return (
       <Box flexDirection="column" paddingX={1}>
-        {backgroundRows(elements, tasks)}
+        {backgroundRows(elements, tasks, columns)}
       </Box>
     )
   }
@@ -260,7 +266,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
           </Box>
         )
       })}
-      {backgroundRows({ Box, Text }, tasks)}
+      {backgroundRows({ Box, Text }, tasks, columns)}
     </Box>
   )
 }

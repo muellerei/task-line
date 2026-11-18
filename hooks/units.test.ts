@@ -1,7 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 
 import type { Task, TaskList } from '../types'
-import { itemsOf } from './background'
+import { LABEL_MIN, itemsOf, labelIn, rowShapeOf } from './background'
 import { TYPE_MAX, cellsOf, fit, plain, width } from './cells'
 import { settingToMs, timingOf } from './config'
 import { layout, progressOf } from './layout'
@@ -918,4 +918,23 @@ test('itemsOf: kinds named like members of Object are kinds like any other', () 
     ],
     total: 3,
   })
+})
+
+test('labelIn: whole when it fits, cut with an ellipsis and not padded when not, nothing under LABEL_MIN cells', () => {
+  expect(LABEL_MIN).toBe(4)
+  expect(labelIn('abcd', 4)).toBe('abcd')
+  expect(labelIn('abcde', 4)).toBe('abc…')
+  expect(labelIn('abcdefgh', 3)).toBeNull()
+  expect(labelIn('abcdefgh', -5)).toBeNull()
+  // a wide character that does not fit leaves no padding behind
+  expect(labelIn('ab漢字漢字', 5)).toBe('ab漢…')
+})
+
+test('rowShapeOf: the description gives way first, then the kind to one cell, +N never', () => {
+  const item = { label: 'a long description', type: 'shell' }
+  expect(rowShapeOf(item, 0, 100)).toEqual({ label: 'a long description', type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 20)).toEqual({ label: 'a long de…', type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 11)).toEqual({ label: null, type: 'shell', kindInPlace: false })
+  expect(rowShapeOf(item, 0, 5)).toEqual({ label: null, type: '…', kindInPlace: false })
+  expect(rowShapeOf({ label: null, type: 'shell' }, 0, 100)).toEqual({ label: null, type: 'shell', kindInPlace: true })
 })
