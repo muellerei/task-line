@@ -1,6 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 
-import { answerOk, answering, call, engine, failedRun, has, mountBand, runCommand, todo, todos, WORK_STATE } from './test-support'
+import { answerOk, answering, call, engine, failedRun, has, mountBand, runCommand, stopBeneath, todo, todos, WORK_STATE } from './test-support'
 import type { TestEngine } from './test-support'
 
 const surfaces = ['terminal', 'desktop'] as const
@@ -777,4 +777,82 @@ test('the line knows the closes of the 20 newest lists', async ($, on) => {
 
 test('the close of a list that 20 newer closes have pushed out is forgotten', async ($, on) => {
   expect(await lateWriteAfterCloses($, on, 20)).toBe(true)
+})
+
+// The stop of the host, as it sends it: only the field the mod reads matters here.
+const stop = ($: TestEngine, background_tasks?: unknown) => $.classic.Stop({ stop_hook_active: false, background_tasks } as never)
+const background = (shell: number, monitor = 0) => [...Array(shell).fill({ type: 'shell' }), ...Array(monitor).fill({ type: 'monitor' })]
+
+for (const surface of surfaces) {
+  test(`${surface}: running background tasks are one line after a stop, under the lists, and an empty stop takes it away`, async ($, on) => {
+    mock.clock(on)
+    engine(on)
+    stopBeneath(on)
+    answerOk(on)
+    const band = await mountBand($, surface)
+    expect(await has(band, '⏵')).toBe(false)
+
+    // no list at all: the line stands alone
+    await stop($, background(2, 1))
+    expect(await band.find({ text: '⏵' })).toBeDefined()
+    expect(await band.find({ text: '2 shell · 1 monitor' })).toBeDefined()
+    expect(await band.find({ text: 'engine' })).toBeDefined()
+
+    // with a list: the list first, the line below it
+    await call($, { tool: 'TodoWrite', todos: [todo('Write tests', 'in_progress')] })
+    const texts = (await band.findAll({ type: 'Text' })).map(t => t.text)
+    expect(texts.indexOf('⏵')).toBeGreaterThan(texts.indexOf('Write tests'))
+    expect(texts.indexOf('⏵')).toBeGreaterThan(-1)
+
+    // the next stop says what runs now
+    await stop($, background(1))
+    expect(await has(band, '1 shell')).toBe(true)
+    expect(await has(band, '2 shell')).toBe(false)
+    await stop($, [])
+    expect(await has(band, '⏵')).toBe(false)
+    expect(await has(band, 'Write tests')).toBe(true)
+  })
+}
+
+test('a stop without the field, or with something else, leaves the line as it was; a list of broken entries clears it', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  stopBeneath(on)
+  const band = await mountBand($, 'terminal')
+  await stop($, background(1))
+  await stop($, undefined)
+  expect(await has(band, '1 shell')).toBe(true)
+  await stop($, 'running')
+  expect(await has(band, '1 shell')).toBe(true)
+  await stop($, [null, 5])
+  expect(await has(band, '⏵')).toBe(false)
+})
+
+test('/task-line hides the background line too, and shows it again', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  stopBeneath(on)
+  const band = await mountBand($, 'terminal')
+  await stop($, background(1))
+  await runCommand($, 'task-line')
+  expect(await has(band, '⏵')).toBe(false)
+  await runCommand($, 'task-line')
+  expect(await has(band, '1 shell')).toBe(true)
+})
+
+test('the stop hook hands on what the hook beneath answered, unchanged', async ($, on) => {
+  mock.clock(on)
+  const answer = { stopReason: 'beneath' }
+  on('classic.Stop', () => answer as never)
+  const result = await stop($, background(1))
+  expect(result).toEqual(answer)
+})
+
+test('a stop that arrives with the band not drawn yet is not lost', async ($, on) => {
+  mock.clock(on)
+  engine(on)
+  stopBeneath(on)
+  await stop($, background(3))
+  const band = await mountBand($, 'terminal')
+  expect(await has(band, '3 shell')).toBe(true)
 })

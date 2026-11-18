@@ -4,6 +4,11 @@ All notable changes to task-line are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- A row for running background tasks, such as `⏵ 2 shell · 1 subagent`, under the lists or alone. A forgotten monitor, agent or background command is easy to miss, and it kept running across `/clear` unseen. The row counts what the `background_tasks` of the host's `Stop` input lists, by kind, and stays until a later `Stop` reports nothing running. Only the kind of each entry is read, never what a task is called or runs. Above the question dialog it takes the place of the list row when there is no list, never joins it, and is cut to 40 cells. `/task-line` hides it too.
+- Measured with Claude Code 2.1.327, headless and interactive: the `Stop` input carries the list, a task that ends by itself wakes the session and the next `Stop` carries the new list, also after an answer interrupted with Esc, which raises no `Stop` of its own. Checked by hand in the terminal with the same version: a background `sleep` shows `⏵ 1 shell` after the answer and the row goes with the answer that its end wakes; `/task-line` hides and shows it; after `/clear` the row is empty until the first answer, then back for the task that kept running. A task of the `Monitor` tool comes with the kind `shell`, so the row says `1 shell`; a monitor of an MCP server was not checked. Not checked: the desktop app (where the row repeats its side panel). A task you end with `/tasks` stays in the row until the next answer, and one Claude started in an interrupted answer is missing until then.
+
 ## [0.3.0] - 2026-10-31
 
 The desktop app was checked by hand after `/reload-plugins`: a new plan, a step moved on by `advance` and steps set out of order by `done` and `start` showed in the line. The yellow state while Claude waits for an answer was seen in the desktop app as well, where it was seen in the terminal only before.

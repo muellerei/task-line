@@ -1,8 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-import type { Task, TaskList } from '../types'
-import { LIST_MAX, plain, fit } from './cells'
+import type { Group, Task, TaskList } from '../types'
+import { groupsOf, textOf } from './background'
+import { LIST_MAX, plain, fit, width } from './cells'
 import { timingOf } from './config'
 import { BUILTIN, closeTasks, issue, put, statusOf, withStatus, writeTask } from './lists'
 import type { Timing } from './lists'
@@ -17,6 +18,8 @@ const questions = atom({ plugin: 'task-line', key: 'questions' } as const, 0)
 const isOff = atom({ plugin: 'task-line', key: 'isOff' } as const, false)
 // The check (`npm test`, `pytest`, ...) whose last run failed, until it passes or the statuses of a list change (a task moves on, is added or removed).
 const failure = atom({ plugin: 'task-line', key: 'failure' } as const, null as string | null)
+// What the host said at the last stop is running in the background, as a count per kind. Replaced at every stop that names a list.
+const background = atom({ plugin: 'task-line', key: 'background' } as const, [] as Group[])
 
 // The tool of claude-mem's to-do list, whatever the plugin is called in the person's setup: told by how its name ends.
 const WORK_STATE = /^mcp__.+__work_state_write$/
@@ -27,6 +30,25 @@ const NBSP = '\u00a0'
 // The theme color of the bar's empty part: a quiet area.
 const TRACK_COLOR = 'userMessageBackground'
 const MAX_LISTS = 2
+// Around the question dialog the host counts the tree at 40 columns.
+const DIALOG_COLUMNS = 40
+const BACKGROUND_GLYPH = '⏵'
+// In the dialog spaces do the aligning: the glyph with one space on each side.
+const DIALOG_GLYPH = ` ${BACKGROUND_GLYPH} `
+
+type Elements = Pick<ReturnType<Engine['ui']['resolve']>, 'Box' | 'Text'>
+
+// The row of background tasks in the band: the glyph in a text of its own, the kinds cut and not wrapped.
+function backgroundRow({ Box, Text }: Elements, text: string) {
+  return (
+    <Box key="background" flexDirection="row" gap={1}>
+      <Text color="inactive">{BACKGROUND_GLYPH}</Text>
+      <Text dimColor wrap="truncate">
+        {text}
+      </Text>
+    </Box>
+  )
+}
 
 // Only the main conversation counts, and only a call the tool accepted.
 const counts = (e: { agentId?: string }, r: { deny?: unknown; isError?: boolean }) => e.agentId === undefined && r.deny === undefined && !r.isError
@@ -112,9 +134,32 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
   const shown = (await read($, lists))
     .filter(l => !l.isHidden && l.tasks.length > 0 && (l.doneAt === null || age(l) < timing.lingerMs))
     .slice(isPlain ? -1 : -MAX_LISTS)
-  if (shown.length === 0) return null
+  const groups = await read($, background)
+  if (shown.length === 0 && groups.length === 0) return null
   // A render may not write state: the hide runs just after, once the wait is over.
   for (const l of shown) if (l.doneAt !== null && Number.isFinite(l.doneAt)) hideLater($, l.name, l.doneAt, timing.lingerMs - age(l))
+
+  // The running background tasks: one row of their own, with or without a list. Above the dialog it takes the place of the list row,
+  // never joins it: with two rows Claude Code refuses the tree.
+  const backgroundText = textOf(groups)
+  if (shown.length === 0) {
+    const elements = $.ui.resolve(e)
+    const { Box, Text } = elements
+    if (isPlain) {
+      const room = DIALOG_COLUMNS - width(DIALOG_GLYPH)
+      return (
+        <Box flexDirection="row">
+          <Text color="inactive">{DIALOG_GLYPH}</Text>
+          <Text dimColor>{width(backgroundText) > room ? fit(backgroundText, room) : backgroundText}</Text>
+        </Box>
+      )
+    }
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        {backgroundRow(elements, backgroundText)}
+      </Box>
+    )
+  }
 
   const asking = (await read($, questions)) > 0
   const failed = await read($, failure)
@@ -194,6 +239,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
           </Box>
         )
       })}
+      {groups.length > 0 && backgroundRow({ Box, Text }, backgroundText)}
     </Box>
   )
 }
@@ -340,6 +386,15 @@ export const register: Register = (on, options) => {
   // Claude asks: the line turns yellow until the person has answered, however many questions are open at once.
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e, next) => whileAsked($, 'AskUserQuestion', e.agentId, () => next(e)))
   on('tool.call', { tool: 'ExitPlanMode' }, ($, e, next) => whileAsked($, 'ExitPlanMode', e.agentId, () => next(e)))
+
+  // The host's stop carries what runs in the background (measured: Claude Code 2.1.327). Only the kinds are read. The stop itself is not
+  // touched: whatever the hooks beneath answer goes up as it is. The count is written before the answer, since the line is drawn
+  // right after the reply and a veto beneath makes the host go on, which ends in the next stop with the new list.
+  on('classic.Stop', async ($, e, next) => {
+    const groups = groupsOf((e as { background_tasks?: unknown }).background_tasks)
+    if (groups) await safely($, 'Stop', () => update($, background, () => groups))
+    return next(e)
+  })
 
   on('session.start', async ($, e, next) => {
     await safely($, 'session.start', () => $.command.register({ name: 'task-line', description: 'Show or hide the task line', immediate: true }))

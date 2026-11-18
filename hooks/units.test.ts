@@ -1,7 +1,8 @@
 import { test, expect } from 'claude-code/testing'
 
 import type { Task, TaskList } from '../types'
-import { cellsOf, fit, plain, width } from './cells'
+import { groupsOf, textOf } from './background'
+import { TYPE_MAX, cellsOf, fit, plain, width } from './cells'
 import { settingToMs, timingOf } from './config'
 import { layout, progressOf } from './layout'
 import { issue, put } from './lists'
@@ -825,7 +826,7 @@ test('ranAndFailed: a command that exited with a code counts, one that was cut o
   for (const text of other) expect(ranAndFailed(text), JSON.stringify(text)).toBe(false)
 })
 
-test('the mod hooks four events and none of them is the prompt: what the person types is never read', async () => {
+test('the mod hooks five events and none of them is the prompt: what the person types is never read', async () => {
   // The README (Privacy) promises it. A hook on `prompt.edit` or `prompt.submit` would break the promise and must fail here first.
   const events = new Set<string>()
   register(
@@ -834,7 +835,7 @@ test('the mod hooks four events and none of them is the prompt: what the person 
     }) as never,
     {} as never,
   )
-  expect([...events].sort()).toEqual(['command.run', 'session.start', 'tool.call', 'ui.render'])
+  expect([...events].sort()).toEqual(['classic.Stop', 'command.run', 'session.start', 'tool.call', 'ui.render'])
 })
 
 test('put: a change that answers null leaves every list as it was, the list is not touched', () => {
@@ -850,4 +851,49 @@ test('issue: numbers rise within a millisecond and start from the clock, so afte
   expect(a).toBeGreaterThanOrEqual(start)
   expect(b).toBeGreaterThan(a)
   expect(c).toBeGreaterThan(b)
+})
+
+test('groupsOf: kinds are counted in the order they are first named, and the text says so', () => {
+  const groups = groupsOf([{ type: 'shell' }, { type: 'monitor' }, { type: 'shell' }])
+  expect(groups).toEqual([
+    { type: 'shell', count: 2 },
+    { type: 'monitor', count: 1 },
+  ])
+  expect(textOf(groups!)).toBe('2 shell · 1 monitor')
+})
+
+test('groupsOf: an empty list is a list, a missing field or a non-list is no answer', () => {
+  expect(groupsOf([])).toEqual([])
+  for (const odd of [undefined, null, 'x', 5, {}, { length: 1 }]) expect(groupsOf(odd), JSON.stringify(odd)).toBeUndefined()
+})
+
+test('groupsOf: an entry without a kind is a task, an entry that is no object is not counted', () => {
+  expect(groupsOf([{}, { type: '' }, { type: '  ' }, { type: undefined }, { type: 'shell' }])).toEqual([
+    { type: 'task', count: 4 },
+    { type: 'shell', count: 1 },
+  ])
+  expect(groupsOf([null, 5, 'shell', undefined])).toEqual([])
+})
+
+test('groupsOf: kinds named like members of Object are kinds of their own', () => {
+  const groups = groupsOf([{ type: 'constructor' }, { type: '__proto__' }, { type: 'constructor' }, { type: 'toString' }])
+  expect(groups).toEqual([
+    { type: 'constructor', count: 2 },
+    { type: '__proto__', count: 1 },
+    { type: 'toString', count: 1 },
+  ])
+})
+
+test('groupsOf: a kind is made safe and cut at TYPE_MAX characters, and the cut text is what groups', () => {
+  expect(TYPE_MAX).toBe(12)
+  expect(groupsOf([{ type: 'verylongtypename' }])).toEqual([{ type: 'verylongtyp…', count: 1 }])
+  // two kinds that read the same once cut are one group
+  expect(groupsOf([{ type: 'verylongtypename-a' }, { type: 'verylongtypename-b' }])).toEqual([{ type: 'verylongtyp…', count: 2 }])
+  // control characters and escape sequences do not reach the line
+  expect(groupsOf([{ type: 'sh\u001b[31mel\nl' }, { type: 'sh\u202eell' }])).toEqual([
+    { type: 'shel l', count: 1 },
+    { type: 'shell', count: 1 },
+  ])
+  // exactly 12 characters stay whole
+  expect(groupsOf([{ type: 'abcdefghijkl' }])).toEqual([{ type: 'abcdefghijkl', count: 1 }])
 })
