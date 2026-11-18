@@ -15,6 +15,8 @@ One clean line per task list above the Claude Code prompt, filled from Claude's 
 
 Nothing on the line is made up or measured by the mod: it reads the todo list that Claude Code keeps for the work. It is a Claude Code mod (a plugin of function hooks).
 
+It also shows what Claude left running in the background: a shell command, a subagent or a monitor, each with what Claude called it. In the terminal Claude Code shows these only as a count in its footer and in `/tasks`, so they are easy to lose sight of while they keep running. See [Background tasks](#background-tasks).
+
 New here? Ideas, questions and a quick "works on my setup" are all welcome. Here's how: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```text
@@ -46,7 +48,11 @@ Cut from real terminal screenshots (dark theme, fullscreen, so the `×` button s
 
 ![A finished list](docs/state-done.png)
 
-**Background tasks.** While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), up to two more rows stand under the lists, or alone when there is no list: one row per task, with what Claude called it and the kind, for the first two tasks the host lists. Those are the ones that have run longest, and so the ones easiest to forget. When more run, the second row ends on `+N` for the tasks not shown.
+### Background tasks
+
+Work that Claude starts in the background keeps running after the answer ends: a long build, a test run in watch mode, a subagent, a monitor that waits for events. Claude Code shows it in the terminal only as a count in its footer (`1 shell`) and in `/tasks`, and a task that is not on screen is easy to forget. The line names each one.
+
+While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), up to two more rows stand under the lists, or alone when there is no list: one row per task, with what Claude called it and the kind, for the first two tasks the host lists. Those are the ones that have run longest, and so the ones easiest to forget. When more run, the second row ends on `+N` for the tasks not shown.
 
 ```text
 ↻ Run a 90-second background wait as… shell
