@@ -46,3 +46,9 @@ export const barCells = async (band: Band) => (await band.find({ key: 'bar' }))?
 
 // What the host answers a stop with when nothing else does: nothing to say. The kit has no implementation of its own for it.
 export const stopBeneath = (on: TestOn) => on('classic.Stop', () => ({}) as never)
+
+// A row of background tasks in the band, as the kit shows it: its text is the texts of the row joined (glyph, description, kind, +N).
+// The kit types the children of a node as unknown.
+export type BackgroundRow = { text: string; children: { props: Record<string, unknown> }[] }
+export const bgRows = async (band: Band) =>
+  (await band.findAll({ type: 'Box' })).filter(b => String(b.props.key ?? '').startsWith('background:')) as unknown as BackgroundRow[]

@@ -14,16 +14,19 @@ const dialog = ($: TestEngine, columns = 40) =>
     viewport: { columns, rows: 24 },
   } as never)
 
-const stop = ($: TestEngine, kinds: string[]) => $.classic.Stop({ stop_hook_active: false, background_tasks: kinds.map(type => ({ type })) } as never)
+const stop = ($: TestEngine, tasks: object[]) => $.classic.Stop({ stop_hook_active: false, background_tasks: tasks } as never)
+const task = (description: string, type = 'shell') => ({ type, description })
 const rowsOf = async (view: Awaited<ReturnType<typeof dialog>>) => (await view.findAll({ type: 'Box', text: /./ })).filter(b => b.props.flexDirection === 'row')
 
-test('the dialog without a list shows the line of background tasks, one row, at most 40 cells', async ($, on) => {
+test('the dialog without a list shows one row of the first task, with its kind and +N for the others', async ($, on) => {
   mock.clock(on)
   stopBeneath(on)
-  await stop($, ['shell', 'monitor'])
+  await stop($, [task('Run the build'), task('Count', 'subagent'), task('Watch')])
   const view = await dialog($)
-  expect(await view.find({ text: '2 tasks' })).toBeUndefined()
-  expect(await view.find({ type: 'Text', text: /1 shell · 1 monitor/ })).toBeDefined()
+  expect(await view.find({ type: 'Text', text: 'Run the build' })).toBeDefined()
+  expect(await view.find({ type: 'Text', text: 'shell' })).toBeDefined()
+  expect(await view.find({ type: 'Text', text: '+2' })).toBeDefined()
+  expect(await view.find({ text: 'Count' })).toBeUndefined()
   expect((await rowsOf(view)).length).toBe(1)
 })
 
@@ -31,39 +34,43 @@ test('the dialog with a list shows the list row only, never both rows', async ($
   mock.clock(on)
   stopBeneath(on)
   answerOk(on)
-  await stop($, ['shell'])
+  await stop($, [task('Run the build')])
   await call($, { tool: 'TodoWrite', todos: [todo('Write tests', 'in_progress')] })
   const view = await dialog($)
   expect(await view.find({ text: 'Write tests' })).toBeDefined()
-  expect(await view.find({ text: '⏵' })).toBeUndefined()
+  expect(await view.find({ text: '↻' })).toBeUndefined()
   expect((await rowsOf(view)).length).toBe(1)
 })
 
-test('in the dialog the line is cut to 40 cells only when it is longer, and is not padded otherwise', async ($, on) => {
+test('in the dialog a short description is not cut or padded, a long one is cut so that the row is 40 cells', async ($, on) => {
   mock.clock(on)
   stopBeneath(on)
-  await stop($, ['shell'])
-  const short = await (await dialog($)).find({ type: 'Text', text: /shell/ })
-  expect(short?.text).toBe('1 shell')
-  await stop($, ['shell', 'monitor', 'subagent', 'workflow', 'verylongtypename', 'another-kind'])
-  const long = await (await dialog($)).find({ type: 'Text', text: /shell/ })
-  expect([...(long?.text ?? '')].length).toBeLessThanOrEqual(37)
+  await stop($, [task('Run the build')])
+  const short = await (await dialog($)).find({ type: 'Text', text: /build/ })
+  expect(short?.text).toBe('Run the build')
+  await stop($, [task('A description far too long for forty cells of a dialog'), task('b')])
+  const long = await (await dialog($)).find({ type: 'Text', text: /description/ })
   expect(long?.text.endsWith('…')).toBe(true)
+  // glyph with its spaces, description, space, kind, space, +1: 40 cells
+  expect(width(' ↻ ') + width(long!.text) + width(' shell') + width(' +1')).toBe(40)
 })
 
-test('the 40 columns of the dialog are the limit: glyph and text fill 40 cells at most, and 37 cells of text are not cut', async ($, on) => {
+test('in the dialog a description that fits exactly is not cut', async ($, on) => {
   mock.clock(on)
   stopBeneath(on)
-  const shown = async (kinds: string[]) => {
-    await stop($, kinds)
-    return (await (await dialog($)).find({ type: 'Text', text: /^\d/ }))?.text ?? ''
-  }
-  // six kinds: "1 a · 1 b · 1 c · 1 d · 1 e · 1 " is 32 cells, and the last kind adds its length
-  const fits = await shown(['a', 'b', 'c', 'd', 'e', 'fffff'])
-  expect(width(fits)).toBe(37)
-  expect(fits.endsWith('…')).toBe(false)
-  const cut = await shown(['a', 'b', 'c', 'd', 'e', 'ffffff'])
-  expect(cut.endsWith('…')).toBe(true)
-  // the glyph cell and the cut text are 40 cells together
-  expect(width(' ⏵ ') + width(cut)).toBe(40)
+  // room = 40 - 3 (' ↻ ') - 6 (' shell') = 31
+  await stop($, [task('x'.repeat(31))])
+  const fits = await (await dialog($)).find({ type: 'Text', text: /^x/ })
+  expect(fits?.text).toBe('x'.repeat(31))
+  await stop($, [task('x'.repeat(32))])
+  const cut = await (await dialog($)).find({ type: 'Text', text: /^x/ })
+  expect(cut?.text).toBe('x'.repeat(30) + '…')
+})
+
+test('in the dialog a task without a description shows its kind in its place', async ($, on) => {
+  mock.clock(on)
+  stopBeneath(on)
+  await stop($, [{ type: 'shell', command: 'sleep 90' }])
+  const view = await dialog($)
+  expect((await view.findAll({ type: 'Text' })).map(t => t.text)).toEqual([' ↻ ', 'shell'])
 })

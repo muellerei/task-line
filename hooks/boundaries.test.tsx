@@ -1,6 +1,22 @@
 import { test, expect, mock } from 'claude-code/testing'
 
-import { answering, barCells, call, engine, exactly, failedRun, filled, has, mountBand, runCommand, todo, todos, WORK_STATE, stopBeneath } from './test-support'
+import {
+  answering,
+  barCells,
+  bgRows,
+  call,
+  engine,
+  exactly,
+  failedRun,
+  filled,
+  has,
+  mountBand,
+  runCommand,
+  todo,
+  todos,
+  WORK_STATE,
+  stopBeneath,
+} from './test-support'
 import type { TestEngine, TestOn } from './test-support'
 
 // Both times 20 seconds: the tests that count to the millisecond hang on this number, not on the default.
@@ -673,33 +689,36 @@ test('a TaskUpdate that the tool answered with success false changes nothing', a
 })
 
 for (const surface of ['terminal', 'desktop'] as const) {
-  test(`${surface}: at 20 columns many kinds stay one row: the glyph is a text of its own and the kinds are cut, not wrapped`, async ($, on) => {
+  test(`${surface}: at 20 columns a background row stays one row: glyph, description cut not wrapped, kind and +N never shrink`, async ($, on) => {
     mock.clock(on)
     engine(on)
     stopBeneath(on)
     const band = await mountBand($, surface, { bodyColumns: 20 })
     await $.classic.Stop({
       stop_hook_active: false,
-      background_tasks: ['shell', 'monitor', 'subagent', 'workflow', 'verylongtypename'].map(type => ({ type })),
+      background_tasks: [1, 2, 3, 4, 5].map(n => ({ type: 'verylongtypename', description: `A fairly long description number ${n}` })),
     } as never)
-    const glyphs = await band.findAll({ type: 'Text', text: '⏵' })
-    expect(glyphs).toHaveLength(1)
-    const kinds = await band.find({ type: 'Text', text: /shell/ })
-    expect(kinds?.props.wrap).toBe('truncate')
-    expect(kinds?.text).toBe('1 shell · 1 monitor · 1 subagent · 1 workflow · 1 verylongtyp…')
-    // one row: the glyph and the kinds share one Box, and nothing else of the line is in it
-    const rows = await band.findAll({ type: 'Box', text: /shell/ })
-    expect(rows.at(-1)?.children).toHaveLength(2)
+    const rows = await bgRows(band)
+    expect(rows).toHaveLength(2)
+    // glyph, description, kind, and on the second row +3: each a text or box of its own, and a row is one Box
+    expect(rows[0]!.children).toHaveLength(3)
+    expect(rows[1]!.children).toHaveLength(4)
+    expect((await band.findAll({ type: 'Text', text: '↻' })).length).toBe(2)
+    expect(rows[0]!.children[1]!.props.wrap).toBe('truncate')
+    expect(rows[0]!.children.slice(2).map(c => c.props.flexShrink)).toEqual([0])
+    expect(rows[1]!.children.slice(2).map(c => c.props.flexShrink)).toEqual([0, 0])
+    expect(rows[1]!.text.endsWith('+3')).toBe(true)
+    expect(rows[1]!.text).toContain('verylongtyp…')
   })
 }
 
-test('without a list the widths of the lists are never asked for: the line of kinds alone draws at any width', async ($, on) => {
+test('without a list the widths of the lists are never asked for: the rows of background tasks alone draw at any width', async ($, on) => {
   mock.clock(on)
   engine(on)
   stopBeneath(on)
   for (const columns of [1, 5, 20, 400]) {
     const band = await mountBand($, 'terminal', { bodyColumns: columns })
-    await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ type: 'shell' }] } as never)
-    expect(await band.find({ text: '1 shell' })).toBeDefined()
+    await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ type: 'shell', description: 'Run it' }] } as never)
+    expect(await band.find({ text: 'Run it' })).toBeDefined()
   }
 })
