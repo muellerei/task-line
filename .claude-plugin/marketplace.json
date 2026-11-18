@@ -6,7 +6,7 @@
     {
       "name": "task-line",
       "source": "./",
-      "description": "One clean line per task list above the prompt, filled from Claude's own todo tools."
+      "description": "One clean line per task list above the prompt, filled from Claude's own todo tools, and a row for each task still running in the background."
     }
   ]
 }
