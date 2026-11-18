@@ -30,9 +30,25 @@ const NBSP = '\u00a0'
 // The theme color of the bar's empty part: a quiet area.
 const TRACK_COLOR = 'userMessageBackground'
 const MAX_LISTS = 2
-// Around the question dialog the host counts the tree at 40 columns; the glyph and its gaps take three of them.
+// Around the question dialog the host counts the tree at 40 columns.
 const DIALOG_COLUMNS = 40
 const BACKGROUND_GLYPH = '⏵'
+// In the dialog spaces do the aligning: the glyph with one space on each side.
+const DIALOG_GLYPH = ` ${BACKGROUND_GLYPH} `
+
+type Elements = Pick<ReturnType<Engine['ui']['resolve']>, 'Box' | 'Text'>
+
+// The row of background tasks in the band: the glyph in a text of its own, the kinds cut and not wrapped.
+function backgroundRow({ Box, Text }: Elements, text: string) {
+  return (
+    <Box key="background" flexDirection="row" gap={1}>
+      <Text color="inactive">{BACKGROUND_GLYPH}</Text>
+      <Text dimColor wrap="truncate">
+        {text}
+      </Text>
+    </Box>
+  )
+}
 
 // Only the main conversation counts, and only a call the tool accepted.
 const counts = (e: { agentId?: string }, r: { deny?: unknown; isError?: boolean }) => e.agentId === undefined && r.deny === undefined && !r.isError
@@ -127,24 +143,20 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
   // never joins it: with two rows Claude Code refuses the tree.
   const backgroundText = textOf(groups)
   if (shown.length === 0) {
-    const { Box, Text } = $.ui.resolve(e)
+    const elements = $.ui.resolve(e)
+    const { Box, Text } = elements
     if (isPlain) {
-      const room = DIALOG_COLUMNS - 3
+      const room = DIALOG_COLUMNS - width(DIALOG_GLYPH)
       return (
         <Box flexDirection="row">
-          <Text color="inactive">{` ${BACKGROUND_GLYPH} `}</Text>
+          <Text color="inactive">{DIALOG_GLYPH}</Text>
           <Text dimColor>{width(backgroundText) > room ? fit(backgroundText, room) : backgroundText}</Text>
         </Box>
       )
     }
     return (
       <Box flexDirection="column" paddingX={1}>
-        <Box flexDirection="row" gap={1}>
-          <Text color="inactive">{BACKGROUND_GLYPH}</Text>
-          <Text dimColor wrap="truncate">
-            {backgroundText}
-          </Text>
-        </Box>
+        {backgroundRow(elements, backgroundText)}
       </Box>
     )
   }
@@ -227,14 +239,7 @@ async function lineOf($: Engine, e: RenderInput, columns: number, timing: Timing
           </Box>
         )
       })}
-      {groups.length > 0 && (
-        <Box key="background" flexDirection="row" gap={1}>
-          <Text color="inactive">{BACKGROUND_GLYPH}</Text>
-          <Text dimColor wrap="truncate">
-            {backgroundText}
-          </Text>
-        </Box>
-      )}
+      {groups.length > 0 && backgroundRow({ Box, Text }, backgroundText)}
     </Box>
   )
 }

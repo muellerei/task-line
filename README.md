@@ -49,7 +49,7 @@ Cut from real terminal screenshots (dark theme, fullscreen, so the `×` button s
 **Background tasks.** While Claude Code reports work running in the background (a shell command started with `run_in_background`, a subagent, a monitor), one more row stands under the lists, or alone when there is no list: a count per kind, in the order the kinds were first named.
 
 ```text
-⏵ 2 shell · 1 monitor
+⏵ 2 shell · 1 subagent
 ```
 
 It stays until a later answer ends with nothing left running. It has no bar, no percent and no `×`, and it never goes away on a timer: a task that is still running is not finished, and a forgotten one is what the row is for. `/task-line` hides it with the rest of the line.
@@ -125,8 +125,9 @@ The line is filled from tool calls Claude already makes, so it needs no extra in
 | `TaskCreate`, `TaskUpdate` | one list, items added and changed |
 | `work_state_write` (the to-do list tool of [claude-mem](https://github.com/thedotmack/claude-mem), which task-line is not affiliated with, or any MCP tool of that name) | one list per `list`, items from `fields.task` and `fields.status` |
 | `update_plan` (the task list of the desktop app's Code tab) | one list, replaced by `items`, moved on by `advance`, `done` and `start`; the turn's `wrap_up` finishes it |
+| `Stop` (the host's event when an answer ends) | the row of background tasks: the `type` of each entry of `background_tasks`, counted per kind |
 
-The row of background tasks has a source of its own: the `Stop` event that Claude Code raises when an answer ends. Its input lists what runs in the background, and the mod counts the entries by their `type` (`shell`, `subagent`, `monitor`, `workflow`; a kind it does not know is shown as sent, cut at 12 characters). Scheduled wake-ups and cron jobs do not count: they wait, they do not run.
+A kind the mod does not know is shown as the host sent it, cut at 12 characters. Scheduled wake-ups and cron jobs do not count: they wait, they do not run. A task of the `Monitor` tool comes with the kind `shell` (measured with 2.1.327; the footer of Claude Code calls it a monitor), so the row says `1 shell` for it. Whether a monitor of an MCP server, such as the live updates of a published page, comes as `monitor` was not checked.
 
 Calls from subagents, calls that were refused and calls that failed are ignored. Of `work_state_write` the mod sees only the inputs of Claude's calls and whether a call was refused or failed, never what the tool stores or returns.
 
@@ -165,7 +166,7 @@ A failing test or build command turns the newest list red (a list that is alread
 - The lists belong to the session: `/clear`, `/resume` and `/branch` start with none, a reload of the mod keeps them.
 - At most two lists are drawn in the band, the newest ones, and the background row comes in addition. A third active list is kept, but not shown. Above a question dialog in the terminal only one row is drawn: the newest list, or the background row when there is no list. The desktop app keeps the band below its dialog.
 - The background row shows the state at the end of the last answer, not live. A task that ends by itself wakes the session, and the answer that follows brings a new state (measured, headless and interactive, also after Esc). Two cases leave it behind until the next answer: a task you end yourself with `/tasks` stays in the row, and a task Claude started in an answer you interrupted with Esc is missing (Esc raises no `Stop`).
-- After `/clear` the row is empty until the first answer ends; then a task that kept running shows again. This follows from `/clear` starting with no state; it was not checked in the host.
+- After `/clear` the row is empty until the first answer ends; then a task that kept running shows again (checked by hand with Claude Code 2.1.327).
 - The desktop app already lists background tasks in its own side panel, so the row repeats it there. It was not checked in the desktop app.
 - A narrow band keeps its shape: the label gives way first, then the note (`npm test failed`, `needs you`) is left out, the glyph and the color still say it. The bar keeps its minimum length (see [Limits](#limits)).
 - `/task-line` also works while Claude is busy.
@@ -201,6 +202,7 @@ A test fails when a hook on another event is added.
 | Tasks in a list | 500 | `MAX_TASKS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests |
 | Lists kept | the 20 newest, and the 20 latest closes | `MAX_KEPT_LISTS` (`lists.ts`) | `units.test.ts` and `boundaries.test.tsx`, the `put` tests; `register.test.tsx`, the two tests of the closes |
 | Kind of a background task | cut at 12 characters | `TYPE_MAX` (`cells.ts`) | `units.test.ts`, the `groupsOf` cut test |
+| Width of the row of background tasks above a question dialog | 40 cells with the glyph, because the host counts the tree there at 40 columns | `DIALOG_COLUMNS` (`register.tsx`) | `dialog.test.tsx`, the test for the 40 columns |
 | Lists drawn in the band | 2 | `MAX_LISTS` (`register.tsx`) | `boundaries.test.tsx`, the test for two lists; the background row comes on top of the two |
 | Settings `lingerSeconds` and `joinSeconds` | 0 to 120 seconds, a value outside is set to the nearest | `SETTING_MAX_SECONDS` (`config.ts`) | `units.test.ts`, the `settingToMs` test |
 
